@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llm-adapter"
+version = "0.1.0"
+description = "Standalone llm adapter/routing layer with a minimal demo UI for testing provider connections."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "Raj", email = ""},
+]
+
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "openai==2.8.1",
+  "google-genai==1.60.0",
+  "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+tokens = [
+  "tiktoken==0.5.2",
+]
+
+dev = [
+  "pytest>=8.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/"
+
+[tool.hatch.build]
+packages = ["src/llm_adapter", "src/llm_adapter_demo"]

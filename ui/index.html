@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LLM Adapter Module Testing</title>
+    <link rel="stylesheet" href="/ui/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <h2>LLM Adapter Module Testing</h2>
+        <p class="subtitle" style="font-style: italic;">This is a demo of how the LLM Adapter can be <font style ="font-weight: bold">imported as a module</font> in your application. For <font style="font-weight: bold">streaming options</font>, refer to the test scripts in README.md or the examples folder (see examples/test_streaming.py).</p>
+      <hr>
+      <br>
+      </header>
+
+      <section class="controls">
+        <div class="controls-row">
+          <div class="field">
+            <label for="model_key_select">Model (Model Key (Model, API Endpoint))</label>
+            <select id="model_key_select"></select>
+          </div>
+        </div>
+        <div class="controls-row">
+          <div class="field">
+            <label for="temperature_input">Temperature (0-2)</label>
+            <input id="temperature_input" type="number" step="0.01" min="0" max="2" placeholder="(optional)" value="0.5" />
+          </div>
+          <div class="field">
+            <label for="top_p_input">Top-p (0-1)</label>
+            <input id="top_p_input" type="number" step="0.01" min="0" max="1" placeholder="(optional)" value="0.5" />
+          </div>
+          <div class="field">
+            <label for="reasoning_effort_select">Reasoning effort</label>
+            <select id="reasoning_effort_select">
+              <option value="">(none)</option>
+              <option value="none">none</option>
+              <option value="minimal">minimal</option>
+              <option value="low" selected>low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="max_tokens_input">Max output tokens</label>
+            <input id="max_tokens_input" type="number" step="1" min="1" placeholder="(optional)" value="200" />
+          </div>
+        </div>
+      </section>
+
+      <section class="model-params">
+        <details id="model_params_details">
+          <summary>Model Parameters (Model Registry)</summary>
+          <pre id="model_params_output" class="response-output"></pre>
+        </details>
+      </section>
+
+      <section class="prompt-section" id="chat_prompt_section">
+        <textarea id="prompt_input" rows="3" placeholder="Ask the model something..."></textarea>
+        <div class="send-controls">
+          <button id="send_btn" type="button">Send</button>
+          <span class="status-label">Status:</span>
+          <span id="processing_status" class="processing-status"></span>
+        </div>
+        
+        <hr>
+        <br>
+
+        <div class="request-panels">
+          <details id="responses_request_details">
+            <summary>LLMAdapter.create Request</summary>
+            <pre id="responses_request_output" class="response-output"></pre>
+          </details>
+          <details id="format_request_details">
+            <summary>Call Signature for Format LLM Response</summary>
+            <pre id="format_request_output" class="response-output"></pre>
+          </details>
+        </div>
+      </section>
+
+      <section class="prompt-section" id="embed_section" hidden>
+        <label for="embed_input">Embedding input</label>
+        <textarea id="embed_input" rows="3" placeholder="Text to embed..."></textarea>
+        <div class="field" style="margin-top: 12px;">
+          <div class="checkbox-row">
+            <input id="normalize_embedding_input" type="checkbox" />
+            <label for="normalize_embedding_input">Normalize embedding</label>
+          </div>
+        </div>
+        <button id="embed_send_btn" type="button">Send</button>
+
+        <div class="request-panels">
+          <details id="responses_request_details_embed">
+            <summary>LLMAdapter.create_embedding Request</summary>
+            <pre id="responses_request_output_embed" class="response-output"></pre>
+          </details>
+          <details id="format_request_details_embed">
+            <summary>Call Signature for Format LLM Response</summary>
+            <pre id="format_request_output_embed" class="response-output"></pre>
+          </details>
+        </div>
+      </section>
+
+      <section class="response-section" id="chat_response_section">
+        <h4>Reasoning / Thinking Tokens</h4>
+        <pre id="reasoning_output" class="response-output"></pre>
+        <h4>Answer / Response</h4>
+        <pre id="answer_output" class="response-output"></pre>
+      </section>
+
+      <section class="response-section" id="embed_response_section" hidden>
+        <h4>Embedding</h4>
+        <pre id="embedding_output" class="response-output"></pre>
+      </section>
+
+      <section class="log-section">
+        <h4>Backend Messages / Errors / Rate Limits</h4>
+        <div id="error_banner" class="error-banner" hidden></div>
+        <pre id="log_output" class="log-output"></pre>
+      </section>
+
+      <section class="response-section">
+        <h4>LLM Provider API Response - llm_handler.create()</h4>
+        <pre id="raw_api_output" class="response-output"></pre>
+      </section>
+
+      <section class="response-section">
+        <h4>Format LLM Response - build_llm_result_from_response()</h4>
+        <pre id="normalized_output" class="response-output"></pre>
+      </section>
+    </div>
+
+    <script src="/ui/app.js?v=2"></script>
+  </body>
+</html>
