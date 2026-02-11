@@ -48,11 +48,11 @@ pip install llm-adapter
 
 3. **Test it out:**
 
-Set **API keys** via environment variables or a `.env` file.
+  Set **API keys** via environment variables or a `.env` file.
 
-Run the following. 
+  Run the following. 
 
->**Note:** The script below uses OpenAI as the models. To test with Gemini, use gemini:native-sdk-3-flash-preview and gemini:native-embed.
+>>**Note:** The script below uses OpenAI as the models. To test with Gemini, use gemini:native-sdk-3-flash-preview and gemini:native-embed.
 > The model registry hosts these model specs. It is defined in src/llm_adapter/model_registry.py
 
 ```python
@@ -81,20 +81,28 @@ print(emb_resp.usage)
 
 Do this if you want to run the **demo UI** or make **changes to the code**.
 
+1. Clone the repository and run the setup script.
+
 ```bash
 git clone https://github.com/vrraj/llm-adapter.git
 cd llm-adapter
 bash scripts/llm_adapter_setup.sh
 
-# Set up API keys
-#Edit .env file and add your API keys
 ```
 
-Then open:
+2. Set **API keys** via environment variables or a `.env` file.
+
+3. Start the application. 
+
+```bash
+make start
+
+```
+**Note:** Run `make start` to run in foreground or `make start-bg` to run in background. Use `make stop` to stop the server.
+
+4. Open the demo UI:
 
 - Demo UI: http://localhost:8100/ui/
-
-**Note:** Run `make start` to run in foreground or `make start-bg` to run in background. Use `make stop` to stop the server.
 
 
 ## Project structure
