@@ -48,7 +48,7 @@ pip install llm-adapter
 
 3. **Test it out:**
 
-Setup **API keys in .env** file or **export as environment variables**
+Set **API keys** via environment variables or a `.env` file.
 
 Run the following. 
 
@@ -94,7 +94,7 @@ Then open:
 
 - Demo UI: http://localhost:8100/ui/
 
-**Note:** Run `make start' to run in foreground or `make start-bg' to run in background. Use `make stop' to stop the server.
+**Note:** Run `make start` to run in foreground or `make start-bg` to run in background. Use `make stop` to stop the server.
 
 
 ## Project structure
@@ -334,7 +334,7 @@ You can use this to quickly sanity-check that your keys, base URLs, and models a
 
 The `examples/` folder contains simple scripts that exercise the handler directly.
 
-**Prerequisite**: First install the package with `pip install -e .`
+**Prerequisite**: Install the package (via PyPI or `pip install -e .` if running from source).
 
 ### OpenAI calls via llm_adapter
 From the repository root directory:
