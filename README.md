@@ -78,7 +78,7 @@ Do this if you want to run the **demo UI** or make **changes to the code**.
 git clone https://github.com/vrraj/llm-adapter.git
 cd llm-adapter
 bash scripts/llm_adapter_setup.sh
-make start
+make start-bg     # Run in background (production)
 
 ```
 
@@ -86,6 +86,7 @@ Then open:
 
 - Demo UI: http://localhost:8100/ui/
 
+**Note:** Run `make start' to run in foreground or `make start-bg' to run in background. Use `make stop' to stop the server.
 
 
 ## Project structure
