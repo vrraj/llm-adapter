@@ -19,41 +19,48 @@ This package provides:
 - **OpenAI API Key** - For OpenAI provider testing
 - **Gemini API Key** - For Gemini provider testing (optional)
 
-**Quick setup check:**
-```bash
-python3 --version  # Should be 3.10+
-pip --version  # Verify pip available
-```
 
-**Create virtual environment (recommended):**
+
+
+## Getting Started
+
+
+### Option 1: Install from PyPI (recommended)
+
+1. **Setup virtual environment:**
+
 ```bash
 # Option A: Create new environment for testing
 python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate
 
 # Option B: Use your existing application environment
 source your-app-env/bin/activate  # Activate your existing venv first
 
 ```
 
-## Getting Started
-
-### Option 1: Install from PyPI (recommended)
+2. **Install llm-adapter:**
 
 ```bash
 pip install llm-adapter
 
 ```
 
-**Test it out:**
+3. **Test it out:**
+
+Setup **API keys in .env** file or **export as environment variables**
+
+Run the following. 
+
+>**Note:** The script below uses OpenAI as the models. To test with Gemini, use gemini:native-sdk-3-flash-preview and gemini:native-embed.
+> The model registry hosts these model specs. It is defined in src/llm_adapter/model_registry.py
 
 ```python
 from llm_adapter import llm_adapter
 
 # Chat
 resp = llm_adapter.create(
-    provider="openai",
-    model="openai:fast",
+    model="openai:gpt-4o-mini",  # provider derived from model registry
     input=[{"role": "user", "content": "Hello"}],
     max_output_tokens=200,
 )
@@ -62,12 +69,12 @@ print(resp.usage)
 
 # Embeddings
 emb_resp = llm_adapter.create_embedding(
-    provider="openai",
-    model="text-embedding-3-small",
+    model="openai:embed_small",  # provider derived from model registry
     input="Hello world"
 )
 print(emb_resp.data)
 print(emb_resp.usage)
+
 ```
 
 ### Option 2: Run from source (demo UI + editable install)
@@ -78,8 +85,9 @@ Do this if you want to run the **demo UI** or make **changes to the code**.
 git clone https://github.com/vrraj/llm-adapter.git
 cd llm-adapter
 bash scripts/llm_adapter_setup.sh
-make start-bg     # Run in background (production)
 
+# Set up API keys
+#Edit .env file and add your API keys
 ```
 
 Then open:

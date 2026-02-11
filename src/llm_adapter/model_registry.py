@@ -47,8 +47,8 @@ REGISTRY: Dict[str, ModelInfo] = {
         capabilities={"dimensions": 3072},
         max_tokens_parameter="max_output_tokens",
     ),
-    "openai:fast": ModelInfo(
-        key="openai:fast",
+    "openai:gpt-4o-mini": ModelInfo(
+        key="openai:gpt-4o-mini",
         provider="openai",
         model="gpt-4o-mini",
         endpoint="responses",
@@ -62,8 +62,8 @@ REGISTRY: Dict[str, ModelInfo] = {
         },
         max_tokens_parameter="max_output_tokens",
     ),
-    "openai:best": ModelInfo(
-        key="openai:best",
+    "openai:gpt-4o": ModelInfo(
+        key="openai:gpt-4o",
         provider="openai",
         model="gpt-4o",
         endpoint="responses",
@@ -77,8 +77,8 @@ REGISTRY: Dict[str, ModelInfo] = {
         },
         max_tokens_parameter="max_output_tokens",
     ),
-    "openai:chat_fast": ModelInfo(
-        key="openai:chat_fast",
+    "openai:chat_gpt-4o-mini": ModelInfo(
+        key="openai:chat_gpt-4o-mini",
         provider="openai",
         model="gpt-4o-mini",
         endpoint="chat_completions",
@@ -92,8 +92,8 @@ REGISTRY: Dict[str, ModelInfo] = {
         },
         max_tokens_parameter="max_completion_tokens",
     ),
-    "openai:chat_best": ModelInfo(
-        key="openai:chat_best",
+    "openai:chat_gpt-4o": ModelInfo(
+        key="openai:chat_gpt-4o",
         provider="openai",
         model="gpt-4o",
         endpoint="chat_completions",
@@ -107,8 +107,8 @@ REGISTRY: Dict[str, ModelInfo] = {
         },
         max_tokens_parameter="max_completion_tokens",
     ),
-    "openai:reasoning_mini": ModelInfo(
-        key="openai:reasoning_mini",
+    "openai:reasoning_gpt-4o-mini": ModelInfo(
+        key="openai:reasoning_gpt-4o-mini",
         provider="openai",
         model="o3-mini",
         endpoint="responses",
@@ -123,8 +123,8 @@ REGISTRY: Dict[str, ModelInfo] = {
         max_tokens_parameter="max_output_tokens",
         reasoning_parameter=("reasoning_effort", "low"),
     ),
-    "openai:reasoning_mini_small": ModelInfo(
-        key="openai:reasoning_mini_small",
+    "openai:reasoning_gpt-5-mini": ModelInfo(
+        key="openai:reasoning_gpt-5-mini",
         provider="openai",
         model="gpt-5-mini",
         endpoint="responses",

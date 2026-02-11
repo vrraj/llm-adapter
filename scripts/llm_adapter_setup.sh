@@ -48,37 +48,36 @@ fi
 echo
 echo "[2/3] Creating Python virtualenv in .venv (if needed) ..."
 if [ ! -d .venv ]; then
-  python3 -m venv .venv
-  echo "  - Created .venv/"
+    python3 -m venv .venv
+    echo "  - Created .venv/"
 else
-  echo "  - .venv/ already exists (reusing)"
+    echo "  - .venv/ already exists (reusing)"
 fi
 
-# shellcheck disable=SC1091
-source .venv/bin/activate
+# Check if venv is already active
+if [ -n "$VIRTUAL_ENV" ]; then
+    echo " Virtual environment already active"
+else
+    source .venv/bin/activate
+    echo " Activated .venv/"
+fi
 
-echo
+echo ""
 echo "[3/3] Installing llm-adapter in editable mode ..."
-python -m pip install --upgrade pip
 pip install -e .
 
-deactivate
+echo ""
+echo "📝 IMPORTANT: Set up API keys BEFORE starting the application:"
+echo "   Edit .env file and add one or both of:"
+echo "   - OPENAI_API_KEY=sk-..."
+echo "   - GEMINI_API_KEY=..."
 
 echo
 echo "✅ Setup complete for llm-adapter. Next steps:"
-echo "  1) Activate your venv:"
-echo "       source .venv/bin/activate"
-echo "  2) Start the FastAPI demo (foreground):"
+echo "  1) Start the FastAPI demo (foreground):"
 echo "       make start"
-echo "     or background with logs:"
+echo "     or background service:"
 echo "       make start-bg"
-echo "  3) Open the demo UI:"
+echo "  2) Open the demo UI:"
 echo "       http://localhost:8100/ui/"
-echo ""
-echo "📝 API Keys Setup:"
-echo "   Edit .env file and add:"
-echo "   - OPENAI_API_KEY=sk-..."
-echo "   - GEMINI_API_KEY=... (optional)"
-echo ""
-echo "🚀 To start as background service:"
-echo "   make start-bg"
+
