@@ -57,11 +57,11 @@ else
 fi
 
 # Check if venv is already active
-if [ -n "$VIRTUAL_ENV" ]; then
-    echo " Virtual environment already active"
+if [ "${VIRTUAL_ENV:-}" != "" ]; then
+    echo "✅ Virtual environment already active"
 else
     source .venv/bin/activate
-    echo " Activated .venv/"
+    echo "✅ Activated .venv/"
 fi
 
 echo ""

@@ -52,7 +52,7 @@ pip install llm-adapter
 
   Run the following. 
 
->>**Note:** The script below uses OpenAI as the models. To test with Gemini, use gemini:native-sdk-3-flash-preview and gemini:native-embed.
+>**Note:** The script below uses OpenAI as the models. To test with Gemini, use gemini:native-sdk-3-flash-preview and gemini:native-embed.
 > The model registry hosts these model specs. It is defined in src/llm_adapter/model_registry.py
 
 ```python
@@ -79,7 +79,7 @@ print(emb_resp.usage)
 
 ### Option 2: Run from source (demo UI + editable install)
 
-Do this if you want to run the **demo UI** or make **changes to the code**.
+Do this if you want to run the **demo UI** (runs on port 8100) or make **changes to the code**.
 
 1. Clone the repository and run the setup script.
 
