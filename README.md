@@ -12,6 +12,30 @@ This package provides:
 
 >**Note:** Includes a tiny FastAPI + Standalone HTML Demo + streaming scripts to sanity-check connectivity and validate responses from supported LLM providers (currently OpenAI and Gemini).
 
+## Prerequisites
+
+- **Python 3.10+** - Required for modern union type syntax (`|`) used in the code
+- **pip** - Package installer (use `python3 -m pip` if `pip` not found)
+- **OpenAI API Key** - For OpenAI provider testing
+- **Gemini API Key** - For Gemini provider testing (optional)
+
+**Quick setup check:**
+```bash
+python3 --version  # Should be 3.10+
+pip --version  # Verify pip available
+```
+
+**Create virtual environment (recommended):**
+```bash
+# Option A: Create new environment for testing
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Option B: Use your existing application environment
+source your-app-env/bin/activate  # Activate your existing venv first
+
+```
+
 ## Getting Started
 
 ### Option 1: Install from PyPI (recommended)
