@@ -41,6 +41,8 @@ if [ ! -f .env ]; then
     : > .env
     echo "  - Created empty .env (fill in any required keys manually)"
   fi
+  echo "  - Note: This .env is for demo/testing in this repository"
+  echo "  - For PyPI installation, create .env in your project directory"
 else
   echo "  - .env already exists (leaving as-is)"
 fi
