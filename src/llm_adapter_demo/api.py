@@ -144,7 +144,6 @@ async def chat(req: ChatRequest) -> ChatResponse:
     provider_request: Dict[str, Any] = {
         "call": "llm_adapter.create",
         "params": {
-            "provider": provider,
             "model": model_key,
             "input": [{"role": "user", "content": req.prompt}],
             "stream": bool(req.stream),
@@ -163,7 +162,6 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     try:
         resp = llm_adapter.create(
-            provider=provider,
             model=model_key,
             input=[{"role": "user", "content": req.prompt}],
             stream=bool(req.stream),
@@ -272,7 +270,6 @@ async def embed(req: EmbedRequest) -> EmbedResponse:
     provider_request: Dict[str, Any] = {
         "call": "llm_adapter.create_embedding",
         "params": {
-            "provider": provider,
             "model": model_key,
             "input": req.text,
             "normalize_embedding": bool(req.normalize_embedding) if req.normalize_embedding is not None else None,
@@ -291,7 +288,6 @@ async def embed(req: EmbedRequest) -> EmbedResponse:
             kwargs["normalize_embedding"] = bool(req.normalize_embedding)
 
         resp = llm_adapter.create_embedding(
-            provider=provider,
             model=model_key,
             input=req.text,
             **kwargs,
