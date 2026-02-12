@@ -1,24 +1,22 @@
 # llm-adapter
 
-Standalone, pip-installable Python module for LLM generation and embeddings, usable either via PyPI or directly from source.
+Standalone, pip-installable Python module for LLM generation and embeddings. Install via **PyPI** or from **source**.
 
 This package provides:
 
 - Unified API for LLM generation and embeddings
 - Standardized LLM response object with normalized access to text, tool calls, and usage
 - Explicit endpoint routing (responses, chat_completions, embeddings, Gemini SDK)
-- Model Registry-driven capability filtering and parameter mapping
+- Model Registry-driven model resolution, capability filtering, and parameter mapping
 - Streaming supported at library level
 
->**Note:** Includes a tiny FastAPI + Standalone HTML Demo + streaming scripts to sanity-check connectivity and validate responses from supported LLM providers (currently OpenAI and Gemini).
+>**Note:** Includes a FastAPI + Standalone HTML Demo + streaming scripts to sanity-check connectivity and validate responses from supported LLM providers (currently OpenAI and Gemini).
 
 ## Prerequisites
 
 - **Python 3.10+** - Required for modern union type syntax (`|`) used in the code
 - **pip** - Package installer (use `python3 -m pip` if `pip` not found)
-- **OpenAI API Key** - For OpenAI provider testing
-- **Gemini API Key** - For Gemini provider testing (optional)
-
+- **LLM API Keys** Currently Supported: **OpenAI API** and **Gemini API**
 
 
 
@@ -52,7 +50,7 @@ pip install llm-adapter
 
   Run the following. 
 
->**Note:** The script below uses OpenAI as the models. To test with Gemini, use gemini:native-sdk-3-flash-preview and gemini:native-embed.
+>**Note:** The script below uses OpenAI as the models. To test with Gemini, use gemini:native-sdk-3-flash-preview and gemini:native-embed. 
 > The model registry hosts these model specs. It is defined in src/llm_adapter/model_registry.py
 
 ```python
@@ -64,16 +62,18 @@ resp = llm_adapter.create(
     input=[{"role": "user", "content": "Hello"}],
     max_output_tokens=200,
 )
+print("Chat Response:")
 print(resp.output_text)
-print(resp.usage)
+print(f"Usage: {getattr(resp, 'usage', 'Usage info not available')}")
 
 # Embeddings
 emb_resp = llm_adapter.create_embedding(
     model="openai:embed_small",  # provider derived from model registry
     input="Hello world"
 )
-print(emb_resp.data)
-print(emb_resp.usage)
+print("Embedding Response:")
+print(f"Embedding (Truncated): {str(emb_resp.data)[:100]}...")
+print(f"Usage: {getattr(emb_resp, 'usage', 'Usage info not available')}")
 
 ```
 
@@ -159,7 +159,7 @@ This standalone package uses these routing semantics:
   - Uses Gemini **embed_content** (`google-genai` `models.embed_content(...)`).
 
 
-## Parameter passing and consumption
+## Call Signature (Parameter passing and consumption)
 
 `LLMAdapter.create(...)` accepts a small set of explicit parameters (`input`, `provider`, `model`, `spec`, `stream`) plus **arbitrary keyword arguments** (`**kwargs`). The adapter then uses the model registry to map/filter some of those kwargs before calling the underlying provider SDK.
 
@@ -181,12 +181,12 @@ This standalone package uses these routing semantics:
 4. **Capability-based filtering (registry-driven)**
    - The registry provides a best-effort `capabilities` dict for each model key.
    - For known capability-gated parameters (e.g. `temperature`, `top_p`, `reasoning_effort`, `stream`, `tools`), the handler will drop parameters that are explicitly marked unsupported.
-   >[!TIP]
+   
    >This repo’s filtering is intentionally permissive; unknown kwargs are generally passed through and may be accepted or rejected by the downstream SDK.
 
 5. **Reasoning effort mapping/defaults (registry-driven)**
    - Some models map `reasoning_effort` into a provider-specific parameter using `ModelInfo.reasoning_parameter`.
-   >[!TIP]
+   
    >Example: Gemini adapter models may map `reasoning_effort` to `thinking_level`.
    - Some models also apply a default reasoning value if the model is reasoning-capable and no effort is provided.
 
@@ -238,17 +238,18 @@ from llm_adapter import llm_adapter
 
 resp = llm_adapter.create(
     provider="openai",
-    model="openai:fast",
+    model="openai:gpt-4o-mini",
     input=[{"role": "user", "content": "Hello"}],
     stream=False,
     max_output_tokens=200,
 )
 
-print(resp.output_text)
-print(resp.usage)
+print(f"Response: {resp}")
+print(f"Output text: {resp.output_text}")
+print(f"Usage: {resp.usage}")
 ```
 
-`llm_adapter.create(...)` returns the provider-native response object. Normalization is opt-in via a helper that derives a consistent, provider-agnostic view of text, usage, and tool calls.
+>`llm_adapter.create(...)` returns the provider-native response object. Normalized response object is available via `llm_adapter.build_llm_result_from_response(...)` helper that derives a consistent, provider-agnostic view of text, usage, and tool calls.
 
 ### Normalized LLMResult helper
 
@@ -256,8 +257,8 @@ When you need a provider-agnostic view of text/usage/tool calls:
 
 ```python
 result = llm_adapter.build_llm_result_from_response(resp, provider="openai")
-print(result["text"])
-print(result["usage"])
+print(f"Text: {result['text']}")
+print(f"Usage: {result['usage']}")
 
 ```
 
@@ -267,13 +268,15 @@ When `stream=True`, `llm_adapter.create(...)` returns an **iterator**, not a nor
 
 - If you call `LLMAdapter.create(stream=True)` in Python code, you must iterate the returned events.
 - The included demo FastAPI `/api/chat` endpoint is designed for **non-streaming JSON** responses.
-- If you set stream=true through the demo UI/API, the server may error because it cannot JSON-encode a live stream.
 
-Use the CLI script `examples/test_streaming.py` to test streaming at the library level.
+
+>Use the CLI script `examples/test_streaming.py` to test streaming at the library level.
+
+**Usage Example:** `python examples/test_streaming.py --provider openai --model openai:gpt-4o-mini --prompt "explan quantum physics in less than 50 words"`
 
 ## Environment variables
 
-Copy `.env.example` to `.env` and fill in any keys you want to test:
+Copy `.env.example` to `.env` and to set up your API keys (or use your existing environment variables):
 
 ```bash
 cp .env.example .env
@@ -295,6 +298,7 @@ You can start the demo directly with `uvicorn` or via the `Makefile`.
 
 ```bash
 uvicorn llm_adapter_demo.api:app --reload --port 8100
+
 ```
 
 * API root: http://127.0.0.1:8100/
@@ -336,7 +340,6 @@ The UI/API supports additional inference parameters:
 
 When `reasoning_effort` is set for a reasoning-capable Gemini model, the handler requests thoughts via `include_thoughts` and the UI displays both **Reasoning** and **Answer** separately.
 
-You can use this to quickly sanity-check that your keys, base URLs, and models are working.
 
 ## CLI examples
 
@@ -351,7 +354,7 @@ From the repository root directory:
 python3 examples/test_openai_chat.py "Say hello from standalone llm-adapter"
 ```
 
-If you omit the argument, the script will prompt you for input. It will:
+The script will:
 
 - Import `llm_adapter` from the installed package.
 - Call `llm_adapter.create(provider="openai", model="openai:fast", input=..., stream=False)`.
@@ -362,14 +365,14 @@ If you omit the argument, the script will prompt you for input. It will:
 From the repository root directory:
 ```bash
 python3 examples/test_openai_embeddings.py "Embed this text via llm_adapter"
+
 ```
 
-You can override the embedding model via `TEST_EMBEDDING_MODEL` (defaults to `text-embedding-3-small`).
+You can override the embedding model via `TEST_EMBEDDING_MODEL` (defaults to `text-embedding-3-small` - direct model name).
 The script will:
 
-- Call `llm_adapter.create(provider="openai", model=..., input=...)`.
-- Print the embedding vector length and a small prefix of the values.
-- Print best-effort token usage if present.
+- Call `llm_adapter.embeddings.create(provider="openai", model=..., input=...)`.
+- Print the embedding vector and usage information.
 
 ### Streaming via llm_adapter (OpenAI or Gemini)
 
