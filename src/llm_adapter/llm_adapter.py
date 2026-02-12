@@ -822,15 +822,18 @@ class LLMAdapter:
 
         elif kind == "level":
             level = requested_value
-            param_map = thinking_tax.get("param_map")
+            param_map = thinking_tax.get("param_map", {})
             if isinstance(param_map, dict):
-                key = str(level).strip().lower()
-                level = param_map.get(key, level)
-            tc = inner["google"].get("thinking_config")
-            if not isinstance(tc, dict):
-                tc = {}
-            tc["thinking_level"] = str(level)
-            inner["google"]["thinking_config"] = tc
+                key = str(requested_value).strip().lower()
+                level = param_map.get(key, requested_value)
+                tc = inner["google"].get("thinking_config")
+                if not isinstance(tc, dict):
+                    tc = {}
+                if rp[0].lower() == "thinking_budget":
+                    tc["thinking_budget"] = str(level)  # Use thinking_budget for budget models
+                else:
+                    tc["thinking_level"] = str(level)  # Use thinking_level for level models
+                inner["google"]["thinking_config"] = tc
 
         out["extra_body"] = {"extra_body": inner}
 
@@ -1009,9 +1012,11 @@ class LLMAdapter:
         try:
             model_info = self._lookup_model_info_from_registry(model)
             if model_info is not None:
-                endpoint = getattr(model_info, "endpoint", "responses") or "responses"
+                endpoint = getattr(model_info, "endpoint", None)
+            else:
+                endpoint = "chat_completions"
         except Exception:
-            endpoint = "responses"
+            endpoint = "chat_completions"
 
         if endpoint == "responses":
             return client.responses.create(model=resolved_model, input=input, stream=stream, **mapped_kwargs)
@@ -1605,9 +1610,9 @@ class _ResponsesFacade:
     def __init__(self, handler: LLMAdapter):
         self._handler = handler
 
-    def create(self, **kwargs: Any):
+    def create(self, **kwargs: Any) -> Any:
         stream = bool(kwargs.pop("stream", False))
-        return self._handler.create(provider="openai", stream=stream, **kwargs)
+        return self._handler.create(**kwargs)
 
 
 class _EmbeddingsFacade:
