@@ -81,7 +81,6 @@ emb_resp = llm_adapter.create_embedding(
 print("Embedding Response:")
 print(f"Embedding (Truncated): {str(emb_resp.data)[:100]}...")
 print(f"Usage: {getattr(emb_resp, 'usage', 'Usage info not available')}")
-
 ```
 
 ### Option 2: Run from source (demo UI + editable install)
