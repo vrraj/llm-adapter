@@ -4,6 +4,14 @@ import os
 import logging
 from typing import Any, Dict, Optional, Iterator, TypedDict, List
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenv not available, rely on environment variables
+    pass
+
 logger = logging.getLogger(__name__)
 
 # ModelSpec import: for this standalone package we import locally.
