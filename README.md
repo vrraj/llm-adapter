@@ -96,6 +96,7 @@ cd llm-adapter
 bash scripts/llm_adapter_setup.sh
 
 ```
+>This script (scripts/llm_adapter_setup.sh) checks prerequisites (`python3`, `make`), creates `.env` if missing (from `.env.example` when available), sets up a local `.venv`, installs the package in editable mode (`pip install -e .`), and prints next steps. Safe to run multiple times.
 
 2. Set required API keys (see **Environment variables** section below).
 
@@ -105,7 +106,7 @@ bash scripts/llm_adapter_setup.sh
 make start
 
 ```
-**Note:** Run `make start` to run in foreground or `make start-bg` to run in background. Use `make stop` to stop the server.
+>**Note:** Run `make start` to run in foreground or `make start-bg` to run in background. Use `make stop` to stop the server.
 
 4. Open the demo UI:
 
@@ -134,6 +135,7 @@ make start
   - `test_openai_chat.py` — CLI example calling `llm_adapter.create` for OpenAI chat
   - `test_openai_embeddings.py` — CLI example calling `llm_adapter.create_embedding` for OpenAI embeddings
   - `test_streaming.py` — CLI example calling `llm_adapter.create(stream=True)` and printing deltas as they arrive
+  - `test_model_spec.py` — Comprehensive test script demonstrating ModelSpec usage with different providers and parameter configurations
 
 
 ## Architecture and design notes
@@ -577,6 +579,21 @@ export GEMINI_API_KEY="..."
 export GEMINI_OPENAI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai/"
 python3 examples/test_streaming.py --model-key gemini:native-sdk-3-flash-preview --prompt "seattle attractions" --max-output-tokens 200
 ```
+
+### ModelSpec configuration testing
+
+From the repository root directory:
+```bash
+python3 examples/test_model_spec.py
+```
+
+The script will:
+- Test ModelSpec usage with different providers (OpenAI, Gemini)
+- Demonstrate parameter configurations (basic, extra, extra_body)
+- Show ModelSpec reusability and validation
+- Test both chat completions and embeddings with ModelSpec
+
+Note: API key errors are expected without valid credentials, but the script structure validates ModelSpec functionality.
 
 ## Supported Providers
 
