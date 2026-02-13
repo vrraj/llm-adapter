@@ -53,12 +53,17 @@ The PyPI package includes the core library only. The demo UI and helper scripts 
 
 3. **Test it out:**
 
-  Set required API keys (see **Environment variables** section below).
+Set required API keys (see **Environment variables** section below).
 
-  Run the following. 
+Save the following as `test_llm_adapter.py`, then run:
 
->**Note:** The script below uses OpenAI model keys. To test with Gemini, use gemini:native-sdk-3-flash-preview and gemini:native-embed. 
-> The model registry hosts these model keys. It is defined in src/llm_adapter/model_registry.py
+```bash
+python test_llm_adapter.py
+```
+
+Notes:
+- The script below uses **OpenAI registry model keys** (`openai:...`).
+- To test Gemini, swap the model keys (from model_registry - `src/llm_adapter/model_registry.py`) to `gemini:native-sdk-3-flash-preview` (generation) and `gemini:native-embed` (embeddings).
 
 ```python
 from llm_adapter import llm_adapter
@@ -93,7 +98,6 @@ Do this if you want to run the **demo UI** (runs on port 8100) or make **changes
 git clone https://github.com/vrraj/llm-adapter.git
 cd llm-adapter
 bash scripts/llm_adapter_setup.sh
-
 ```
 >This script (scripts/llm_adapter_setup.sh) checks prerequisites (`python3`, `make`), creates `.env` if missing (from `.env.example` when available), sets up a local `.venv`, installs the package in editable mode (`pip install -e .`), and prints next steps. Safe to run multiple times.
 
@@ -103,7 +107,6 @@ bash scripts/llm_adapter_setup.sh
 
 ```bash
 make start
-
 ```
 >**Note:** Run `make start` to run in foreground or `make start-bg` to run in background. Use `make stop` to stop the server.
 
@@ -472,7 +475,6 @@ Copy `.env.example` to `.env` and to set up your API keys (or use your existing 
 
 ```bash
 cp .env.example .env
-
 ```
 
 Supported env vars:
@@ -490,7 +492,6 @@ You can start the demo directly with `uvicorn` or via the `Makefile`.
 
 ```bash
 uvicorn llm_adapter_demo.api:app --reload --port 8100
-
 ```
 
 * API root: http://127.0.0.1:8100/
