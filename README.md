@@ -1,28 +1,32 @@
-# llm-adapter
+
+# vrraj-llm-adapter
+
+![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
 
-Standalone, pip-installable Python module for LLM generation and embeddings. Install via **PyPI** or from **source**.
+Registry-driven LLM routing and response normalization for generation and embeddings (explicit endpoint semantics, model capability filtering, and parameter mapping). 
+Install from **PyPI** for the core library, or clone from **GitHub** to run the demo UI and test scripts.
 
-GitHub: https://github.com/vrraj/llm-adapter • PyPI: https://pypi.org/project/llm-adapter/
+GitHub: https://github.com/vrraj/llm-adapter • PyPI: https://pypi.org/project/vrraj-llm-adapter/
 
 This package provides:
 
-- **Unified API** for LLM generation and embeddings
-- **Standardized LLM response** with normalized access to text, tool calls, and usage
-- Registry-based **pricing metadata helpers**
-- **Explicit endpoint routing** (responses, chat_completions, embeddings, Gemini SDK)
-- **Model Registry-driven** model resolution, capability filtering, and parameter mapping
-- **ModelSpec** for reusable, typed configuration (structured alternative to passing kwargs)
+- LLM **provider-agnostic** entrypoints for generation and embeddings
+- **Standardized response helper** with normalized access to response text, tool calls, and usage
+- **Registry-based pricing** metadata helpers
+- Explicit **endpoint routing** (Responses api, chat completions, embeddings, Gemini SDK, Genini OpenAI API)
+- `ModelRegistry` for registry-driven model resolution, capability filtering, and parameter mapping
+- `ModelSpec` for reusable, typed configuration (structured alternative to passing kwargs)
 - **Streaming** supported at library level
 
->**Note:** Includes a FastAPI + Standalone HTML Demo + streaming scripts to sanity-check API connectivity and validate responses from supported LLM providers.
+>**Note:** Demo UI and helper scripts are available when running from source.
 
 ## Prerequisites
 
 - **Python 3.10+** - Required for union type syntax (`|`) used in the code
   - Tested primarily on Python 3.10–3.12 (3.13 may work but depends on upstream SDK compatibility).
 - **pip** - Package installer (use `python3 -m pip` if `pip` not found)
-- **LLM API Keys** Currently Supported: **OpenAI API** and **Gemini API**
+- **LLM API Keys** Currently Supported: OpenAI and Gemini models
 
 
 
@@ -42,11 +46,10 @@ source .venv/bin/activate
 # source your-app-env/bin/activate
 ```
 
-2. **Install llm-adapter:**
+2. **Install vrraj-llm-adapter:**
 
 ```bash
-pip install llm-adapter
-
+pip install vrraj-llm-adapter
 ```
 
 The PyPI package includes the core library only. The demo UI and helper scripts are available when running from source (see Option 2 below).
@@ -544,12 +547,12 @@ The `examples/` folder contains simple scripts that exercise the handler directl
 From the repository root directory:
 
 ```bash
-python3 examples/test_openai_chat.py "Say hello from standalone llm-adapter"
+python3 examples/test_openai_chat.py "Say hello from standalone vrraj-llm-adapter"
 ```
 
 The script will:
 
-- Import `llm_adapter` from the installed package.
+- Import `vrraj-llm-adapter` from the installed package.
 - Call `llm_adapter.create(provider="openai", model="openai:fast", input=..., stream=False)`.
   - Print the response text and best-effort token usage if available.
 
@@ -621,7 +624,6 @@ pip install -e .
 make start
 ```
 
----
 
 ## License
 

@@ -22,7 +22,7 @@ The `llm-adapter` package provides a unified interface for LLM generation and em
 
 ### Installation
 ```bash
-pip install llm-adapter
+pip install vrraj-llm-adapter
 ```
 
 ### Quick Start
