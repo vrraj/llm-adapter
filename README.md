@@ -12,6 +12,7 @@ This package provides:
 - Registry-based **pricing metadata helpers**
 - **Explicit endpoint routing** (responses, chat_completions, embeddings, Gemini SDK)
 - **Model Registry-driven** model resolution, capability filtering, and parameter mapping
+- **ModelSpec** for reusable, typed configuration (structured alternative to passing kwargs)
 - **Streaming** supported at library level
 
 >**Note:** Includes a FastAPI + Standalone HTML Demo + streaming scripts to sanity-check API connectivity and validate responses from supported LLM providers.
@@ -56,8 +57,8 @@ The PyPI package includes the core library only. The demo UI and helper scripts 
 
   Run the following. 
 
->**Note:** The script below uses OpenAI as the models. To test with Gemini, use gemini:native-sdk-3-flash-preview and gemini:native-embed. 
-> The model registry hosts these model specs. It is defined in src/llm_adapter/model_registry.py
+>**Note:** The script below uses OpenAI model keys. To test with Gemini, use gemini:native-sdk-3-flash-preview and gemini:native-embed. 
+> The model registry hosts these model keys. It is defined in src/llm_adapter/model_registry.py
 
 ```python
 from llm_adapter import llm_adapter
@@ -167,7 +168,7 @@ This standalone package uses these routing semantics:
   - Uses Gemini **embed_content** (`google-genai` `models.embed_content(...)`).
 
 
-## Call Signature (Parameter passing and consumption)
+## Call Signature
 
 `LLMAdapter.create(...)` accepts a small set of explicit parameters (`input`, `provider`, `model`, `spec`, `stream`) plus **arbitrary keyword arguments** (`**kwargs`). The adapter then uses the model registry to map/filter some of those kwargs before calling the underlying provider SDK.
 
@@ -228,6 +229,63 @@ resp = llm_adapter.create_embedding(
     **kwargs,
 )
 ```
+
+## ModelSpec: Structured Configuration
+
+`ModelSpec` provides a type-safe, reusable way to configure model parameters as an alternative to passing individual parameters.
+
+>**Note**: See `examples/test_model_spec.py` for a test script demonstrating ModelSpec usage with different providers and parameter configurations.
+
+### Using ModelSpec
+
+```python
+from llm_adapter import llm_adapter
+from llm_adapter import ModelSpec
+
+# Create a reusable configuration
+# Note: ModelSpec requires explicit provider and uses provider-native model names
+chat_spec = ModelSpec(
+    provider="openai",                    # Required: explicit provider
+    model="gpt-4o-mini",                # Provider-native model name
+    temperature=0.7,
+    max_output_tokens=1000,
+    extra={"custom_param": "value"}       # General provider-specific parameters
+)
+
+# Alternative with extra_body for OpenAI-compatible providers
+chat_spec_with_body = ModelSpec(
+    provider="openai",
+    model="gpt-4o-mini",
+    temperature=0.7,
+    extra={"extra_body": {"custom_field": "value"}}  # For provider-specific JSON fields
+)
+
+# Use the spec in multiple calls
+resp1 = llm_adapter.create(spec=chat_spec, input=[{"role": "user", "content": "Hello"}])
+resp2 = llm_adapter.create(spec=chat_spec, input=[{"role": "user", "content": "How are you?"}])
+
+# Works with embeddings too
+embed_spec = ModelSpec(
+    provider="openai",                    # Required: explicit provider
+    model="text-embedding-3-small"       # Provider-native model name
+)
+resp = llm_adapter.create_embedding(spec=embed_spec, input="Text to embed")
+```
+
+### ModelSpec vs Individual Parameters
+
+| Approach | Provider | Model Name | Auto-detection | Type Safety |
+|----------|----------|------------|----------------|-------------|
+| **Individual params** | Optional (auto-detected from registry) | Registry key (`openai:gpt-4o-mini`) | ✅ Yes | ❌ Runtime |
+| **ModelSpec** | Required (explicit) | Provider-native (`gpt-4o-mini`) | ❌ No | ✅ Static type-checkers |
+
+### Benefits
+
+- **Type Safety**: Provider type hints support static checking (e.g. mypy/pyright)
+- **Configuration Reuse**: Define once, use multiple times
+- **Stable call sites**: Keep call sites consistent even when provider parameters differ (registry maps where needed)
+- **Clean API**: Organized parameter grouping
+- **Flexibility**: Mix spec with additional kwargs
 
 ## API usage and normalization
 
