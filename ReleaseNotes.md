@@ -8,6 +8,7 @@ The `llm-adapter` package provides a unified interface for LLM generation and em
 ### Key Features
 - **Unified API**: Single interface for OpenAI and Gemini providers
 - **Model Registry**: Centralized model configuration and parameter mapping
+- **ModelSpec**: Structured, reusable configuration alternative to passing individual kwargs
 - **Automatic Provider Resolution**: Infer provider from model registry keys
 - **Parameter Mapping**: Convert generic parameters to provider-specific formats
 - **Response Normalization**: Consistent response format across providers
