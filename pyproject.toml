@@ -6,9 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "llm-adapter"
 version = "0.1.0"
 description = "Standalone llm adapter/routing layer with a demo UI for testing provider connections and call and output signature comparison."
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = { file = "LICENSE" }
 authors = [
   {name = "Rajkumar Velliavitil"},
 ]
@@ -32,6 +32,8 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/vrraj/llm-adapter"
+Repository = "https://github.com/vrraj/llm-adapter"
+Issues = "https://github.com/vrraj/llm-adapter/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

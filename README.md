@@ -1,20 +1,25 @@
 # llm-adapter
 
+
 Standalone, pip-installable Python module for LLM generation and embeddings. Install via **PyPI** or from **source**.
+
+GitHub: https://github.com/vrraj/llm-adapter • PyPI: https://pypi.org/project/llm-adapter/
 
 This package provides:
 
-- Unified API for LLM generation and embeddings
-- Standardized LLM response object with normalized access to text, tool calls, and usage
-- Explicit endpoint routing (responses, chat_completions, embeddings, Gemini SDK)
-- Model Registry-driven model resolution, capability filtering, and parameter mapping
-- Streaming supported at library level
+- **Unified API** for LLM generation and embeddings
+- **Standardized LLM response** with normalized access to text, tool calls, and usage
+- Registry-based **pricing metadata helpers**
+- **Explicit endpoint routing** (responses, chat_completions, embeddings, Gemini SDK)
+- **Model Registry-driven** model resolution, capability filtering, and parameter mapping
+- **Streaming** supported at library level
 
->**Note:** Includes a FastAPI + Standalone HTML Demo + streaming scripts to sanity-check connectivity and validate responses from supported LLM providers (currently OpenAI and Gemini).
+>**Note:** Includes a FastAPI + Standalone HTML Demo + streaming scripts to sanity-check API connectivity and validate responses from supported LLM providers.
 
 ## Prerequisites
 
-- **Python 3.10+** - Required for modern union type syntax (`|`) used in the code
+- **Python 3.10+** - Required for union type syntax (`|`) used in the code
+  - Tested primarily on Python 3.10–3.12 (3.13 may work but depends on upstream SDK compatibility).
 - **pip** - Package installer (use `python3 -m pip` if `pip` not found)
 - **LLM API Keys** Currently Supported: **OpenAI API** and **Gemini API**
 
@@ -23,18 +28,17 @@ This package provides:
 ## Getting Started
 
 
-### Option 1: Install from PyPI (recommended)
+### Option 1: Install from PyPI
 
 1. **Setup virtual environment:**
 
 ```bash
-# Option A: Create new environment for testing
+# Option A: create a new environment for testing
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Option B: Use your existing application environment
-source your-app-env/bin/activate  # Activate your existing venv first
-
+# Option B: use your existing application environment
+# source your-app-env/bin/activate
 ```
 
 2. **Install llm-adapter:**
@@ -44,9 +48,11 @@ pip install llm-adapter
 
 ```
 
+The PyPI package includes the core library only. The demo UI and helper scripts are available when running from source (see Option 2 below).
+
 3. **Test it out:**
 
-  Set **API keys** via environment variables or a `.env` file.
+  Set required API keys (see **Environment variables** section below).
 
   Run the following. 
 
@@ -90,7 +96,7 @@ bash scripts/llm_adapter_setup.sh
 
 ```
 
-2. Set **API keys** via environment variables or a `.env` file.
+2. Set required API keys (see **Environment variables** section below).
 
 3. Start the application. 
 
@@ -102,7 +108,9 @@ make start
 
 4. Open the demo UI:
 
-- Demo UI: http://localhost:8100/ui/
+- http://localhost:8100/ui/
+
+(See **Run the demo FastAPI server + UI** section below for full details.)
 
 
 ## Project structure
@@ -123,7 +131,7 @@ make start
   - `styles.css` — simple styling
 - `examples/`
   - `test_openai_chat.py` — CLI example calling `llm_adapter.create` for OpenAI chat
-  - `test_openai_embeddings.py` — CLI example calling `llm_adapter.embeddings.create` for OpenAI embeddings
+  - `test_openai_embeddings.py` — CLI example calling `llm_adapter.create_embedding` for OpenAI embeddings
   - `test_streaming.py` — CLI example calling `llm_adapter.create(stream=True)` and printing deltas as they arrive
 
 
@@ -138,10 +146,10 @@ make start
    - Parameter mappings (e.g. `max_output_tokens` vs `max_completion_tokens`)
 
 2. **LLM Adapter** (`src/llm_adapter/llm_adapter.py`)
-   - Unified `create(...)` entry point for chat/generation across providers
-   - Unified `create_embedding(...)` entry point for embeddings across providers
-   - Automatic parameter name conversion and capability-based filtering
-   - Registry-driven provider routing for Gemini adapter vs native SDK
+   - Routes generation calls based on registry metadata
+   - Routes embedding calls based on registry metadata
+   - Applies parameter mapping and capability-based filtering
+   - Handles provider routing (OpenAI adapter vs Gemini native SDK)
 
 ### Endpoint semantics (important)
 
@@ -166,32 +174,25 @@ This standalone package uses these routing semantics:
 ### How kwargs are processed (high level)
 
 1. **Spec merge (optional)**
-   - If you pass `spec=ModelSpec(...)`, the handler merges `spec.to_kwargs()` with your explicit kwargs.
-   - Explicit kwargs win over spec values.
+   - If `spec=ModelSpec(...)` is provided, merge `spec.to_kwargs()` with explicit `kwargs` (explicit wins).
 
 2. **Drop `None` values**
-   - The handler removes any `kwargs` entries where the value is `None`.
-   - This avoids provider SDK errors from receiving `max_output_tokens=None`, etc.
+   - Remove `kwargs` entries where the value is `None`.
 
-3. **Token limit parameter mapping (registry-driven)**
-   - The registry controls which token-limit parameter name is used for a model via `ModelInfo.max_tokens_parameter`.
-   - If you pass `max_output_tokens=...` (or `max_tokens=...`), the handler may remap it to the model’s configured token param.
-     - Example: chat-completions models may map to `max_completion_tokens`.
+3. **Token limit mapping (registry-driven)**
+   - Remap token-limit params to the model’s configured name via `ModelInfo.max_tokens_parameter`
+     (e.g. `max_output_tokens` → `max_completion_tokens`).
 
-4. **Capability-based filtering (registry-driven)**
-   - The registry provides a best-effort `capabilities` dict for each model key.
-   - For known capability-gated parameters (e.g. `temperature`, `top_p`, `reasoning_effort`, `stream`, `tools`), the handler will drop parameters that are explicitly marked unsupported.
-   
-   >This repo’s filtering is intentionally permissive; unknown kwargs are generally passed through and may be accepted or rejected by the downstream SDK.
+4. **Capability filtering (registry-driven)**
+   - Drop known parameters that are explicitly unsupported for that model (e.g. `temperature`, `top_p`, `reasoning_effort`, `stream`, `tools`).
+   - Unknown kwargs are generally passed through and may be accepted/rejected by the downstream SDK.
 
 5. **Reasoning effort mapping/defaults (registry-driven)**
-   - Some models map `reasoning_effort` into a provider-specific parameter using `ModelInfo.reasoning_parameter`.
-   
-   >Example: Gemini adapter models may map `reasoning_effort` to `thinking_level`.
-   - Some models also apply a default reasoning value if the model is reasoning-capable and no effort is provided.
+   - Map `reasoning_effort` into provider-specific parameters using `ModelInfo.reasoning_parameter` (Gemini examples: `thinking_level`, `thinking_budget`).
+   - Apply defaults when the model is reasoning-capable and no effort is provided.
 
-6. **Gemini thinking tax / config injection (Gemini-only, registry-driven)**
-   - For Gemini models with `thinking_tax` configured, the handler may adjust token budgets and/or inject provider-specific thinking config into `extra_body`.
+6. **Gemini thinking tax / config injection (Gemini-only)**
+   - For Gemini models with `thinking_tax`, adjust token budgets and/or inject thinking config via `extra_body`.
 
 ### Common parameters you can pass today
 
@@ -216,14 +217,13 @@ In addition, the handler passes through many provider-specific kwargs. Two commo
 - If you pass a provider SDK parameter that the downstream method does not accept, you may get a `TypeError` (unexpected keyword argument) from the SDK.
 - If you want the handler to reliably drop/accept a parameter for a given model key, add it to that model’s `capabilities` in `src/llm_adapter/model_registry.py`.
 
-## Embeddings API: adapter vs native SDK
+## Embeddings API (registry-routed)
 
-`LLMAdapter.create_embedding(...)` is provider-agnostic:
+`llm_adapter.create_embedding(...)` is provider-agnostic:
 
 ```python
 resp = llm_adapter.create_embedding(
-    provider="openai" | "gemini" | "gemini_native",
-    model="...",  # registry key or provider-native id
+    model="...",  # registry key (provider auto-detected)
     input="...",  # str or list[str]
     **kwargs,
 )
@@ -249,18 +249,8 @@ print(f"Output text: {resp.output_text}")
 print(f"Usage: {resp.usage}")
 ```
 
->`llm_adapter.create(...)` returns the provider-native response object. Normalized response object is available via `llm_adapter.build_llm_result_from_response(...)` helper that derives a consistent, provider-agnostic view of text, usage, and tool calls.
+>`llm_adapter.create(...)` returns the provider-native response object. Use `llm_adapter.build_llm_result_from_response(...)` for a provider-agnostic normalized view (see API Reference below).
 
-### Normalized LLMResult helper
-
-When you need a provider-agnostic view of text/usage/tool calls:
-
-```python
-result = llm_adapter.build_llm_result_from_response(resp, provider="openai")
-print(f"Text: {result['text']}")
-print(f"Usage: {result['usage']}")
-
-```
 
 ### Streaming
 
@@ -272,7 +262,150 @@ When `stream=True`, `llm_adapter.create(...)` returns an **iterator**, not a nor
 
 >Use the CLI script `examples/test_streaming.py` to test streaming at the library level.
 
-**Usage Example:** `python examples/test_streaming.py --provider openai --model openai:gpt-4o-mini --prompt "explan quantum physics in less than 50 words"`
+**Usage Example:** `python examples/test_streaming.py --provider openai --model openai:gpt-4o-mini --prompt "explain quantum physics in less than 50 words"`
+
+## API Reference
+
+Below are the primary public APIs exposed by `llm_adapter`.
+
+### `llm_adapter.create(...)`
+
+Unified generation entrypoint across providers.
+
+```python
+resp = llm_adapter.create(
+    input: str | list[dict],
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    spec: Optional[ModelSpec] = None,
+    stream: bool = False,
+    **kwargs
+)
+```
+
+- Resolves provider automatically from registry key if not passed.
+- Routes to the appropriate endpoint (`responses`, `chat_completions`, `gemini_sdk`, etc.).
+- Applies registry-driven parameter mapping and capability filtering.
+- Returns a provider-native response (or an iterator when `stream=True`).
+
+---
+
+### `llm_adapter.create_embedding(...)`
+
+Unified embeddings entrypoint across providers.
+
+```python
+emb = llm_adapter.create_embedding(
+    provider: Optional[str] = None,
+    model: str,
+    input: str | list[str],
+    **kwargs
+)
+```
+
+- Infers provider from registry key when possible.
+- Routes to OpenAI embeddings or Gemini `embed_content`.
+- Returns provider-native embedding response.
+
+---
+
+### `llm_adapter.build_llm_result_from_response(...)`
+
+Provider-agnostic normalization helper.
+
+```python
+result = llm_adapter.build_llm_result_from_response(
+    resp,
+    provider: Optional[str] = None,
+    model_key: Optional[str] = None
+)
+```
+
+- Normalizes text, usage, reasoning tokens, and tool calls.
+- If `provider` is not provided, attempts inference from:
+  1. `model_key`
+  2. `resp.model`
+  3. defaults to `"openai"`
+- Returns a consistent dictionary structure across providers.
+
+#### Example 1: Let the adapter infer provider from registry key
+
+```python
+resp = llm_adapter.create(
+    model="gemini:openai-reasoning-2.5-flash",
+    input=[{"role": "user", "content": "Explain gravity briefly"}],
+)
+
+result = llm_adapter.build_llm_result_from_response(
+    resp,
+    model_key="gemini:openai-reasoning-2.5-flash"
+)
+
+print(result["text"])
+print(result["usage"])
+```
+
+---
+
+#### Example 2: Explicit provider override
+
+```python
+resp = llm_adapter.create(
+    provider="openai",
+    model="openai:gpt-4o-mini",
+    input="Summarize AI in one sentence",
+)
+
+result = llm_adapter.build_llm_result_from_response(
+    resp,
+    provider="openai"
+)
+
+print(result["text"])
+print(result["tool_calls"])
+```
+
+---
+
+#### Example 3: Fully automatic inference (from `resp.model` when available)
+
+```python
+resp = llm_adapter.create(
+    model="openai:gpt-4o-mini",
+    input="Hello",
+)
+
+result = llm_adapter.build_llm_result_from_response(resp)
+
+print(result["provider"])
+print(result["text"])
+```
+
+---
+
+### `llm_adapter.get_pricing_for_model_key(...)`
+
+Registry-based pricing metadata lookup.
+
+```python
+pricing = llm_adapter.get_pricing_for_model_key("openai:gpt-4o-mini")
+```
+
+- Returns pricing metadata stored in the model registry (if defined).
+- Does not compute costs — exposes registry metadata only.
+
+---
+
+### `llm_adapter.get_pricing_for_model(...)`
+
+Lookup pricing metadata using provider-native model name.
+
+```python
+pricing = llm_adapter.get_pricing_for_model("gpt-4o-mini-2024-07-18")
+```
+
+- Resolves registry entry from provider model name.
+- Returns associated pricing metadata if present.
 
 ## Environment variables
 
@@ -371,7 +504,7 @@ python3 examples/test_openai_embeddings.py "Embed this text via llm_adapter"
 You can override the embedding model via `TEST_EMBEDDING_MODEL` (defaults to `text-embedding-3-small` - direct model name).
 The script will:
 
-- Call `llm_adapter.embeddings.create(provider="openai", model=..., input=...)`.
+- Call `llm_adapter.create_embedding(provider="openai", model=..., input=...)`.
 - Print the embedding vector and usage information.
 
 ### Streaming via llm_adapter (OpenAI or Gemini)
@@ -386,6 +519,14 @@ export GEMINI_API_KEY="..."
 export GEMINI_OPENAI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai/"
 python3 examples/test_streaming.py --model-key gemini:native-sdk-3-flash-preview --prompt "seattle attractions" --max-output-tokens 200
 ```
+
+## Supported Providers
+
+Supports:
+- **OpenAI** (Responses API, Chat Completions API, Embeddings API)
+- **Gemini** (native `google-genai` SDK and OpenAI-compatible endpoint)
+
+Models and capabilities are defined in `src/llm_adapter/model_registry.py`.
 
 ## Adding New Models
 
@@ -406,3 +547,7 @@ make start
 ```
 
 ---
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.

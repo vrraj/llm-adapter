@@ -159,8 +159,74 @@ class LLMAdapter:
             pass
         return None
 
-    def build_llm_result_from_response(self, resp: Any, *, provider: str = "openai") -> LLMResult:
+    # ----------------------------
+    # Pricing helpers (registry-driven)
+    # ----------------------------
+    def get_pricing_for_model_key(self, model_key: str) -> Optional[Dict[str, Any]]:
+        """Return pricing metadata for a registry model key, if present.
+
+        This adapter does not compute costs; it only exposes any pricing metadata
+        stored in the model registry (if you choose to include it there).
+        """
+        try:
+            if not model_key:
+                return None
+            mi = self.model_registry.get(model_key)
+            if mi is None:
+                return None
+            pricing = getattr(mi, "pricing", None)
+            return pricing if isinstance(pricing, dict) else None
+        except Exception:
+            return None
+
+    def get_pricing_for_model(self, model: str) -> Optional[Dict[str, Any]]:
+        """Return pricing metadata for a provider model name, if present in registry."""
+        try:
+            if not model:
+                return None
+            mi = self._lookup_model_info_from_registry(model)
+            if mi is None:
+                return None
+            pricing = getattr(mi, "pricing", None)
+            return pricing if isinstance(pricing, dict) else None
+        except Exception:
+            return None
+
+    def build_llm_result_from_response(
+        self,
+        resp: Any,
+        *,
+        provider: Optional[str] = None,
+        model_key: Optional[str] = None,
+    ) -> LLMResult:
         """Build a normalized LLMResult from a non-streaming response."""
+
+        # Provider inference (optional): callers may pass provider and/or model_key.
+        # If provider is not provided, infer it from:
+        #   1) registry key (model_key), then
+        #   2) provider-native model name on the response (resp.model), then
+        #   3) default to "openai" for backward compatibility.
+        provider_norm = (provider or "").strip().lower() or None
+        if not provider_norm:
+            try:
+                if model_key:
+                    mi = self.model_registry.get(model_key)
+                else:
+                    mi = None
+                if mi is None:
+                    try:
+                        resp_model = getattr(resp, "model", None)
+                    except Exception:
+                        resp_model = None
+                    if resp_model:
+                        mi = self._lookup_model_info_from_registry(str(resp_model))
+                inferred = getattr(mi, "provider", None) if mi is not None else None
+                if inferred:
+                    provider_norm = str(inferred).strip().lower()
+            except Exception:
+                provider_norm = None
+        if not provider_norm:
+            provider_norm = "openai"
 
         try:
             model = getattr(resp, "model", None) or ""
@@ -211,7 +277,7 @@ class LLMAdapter:
                     return getattr(obj, name, None)
 
                 completion_tokens = None
-                if provider == "openai":
+                if provider_norm == "openai":
                     input_tokens = _uget(usage_block, "input_tokens")
                     if input_tokens is None:
                         input_tokens = _uget(usage_block, "prompt_tokens")
@@ -236,7 +302,7 @@ class LLMAdapter:
                         else (details_out.get("reasoning_tokens") if isinstance(details_out, dict) else None)
                     )
 
-                elif provider == "gemini":
+                elif provider_norm == "gemini":
                     prompt_tokens = _uget(usage_block, "prompt_tokens")
                     input_tokens = prompt_tokens if prompt_tokens is not None else _uget(usage_block, "input_tokens")
 
@@ -346,7 +412,7 @@ class LLMAdapter:
 
         reasoning_text = None
         try:
-            if provider == "gemini" and isinstance(best_text, str):
+            if provider_norm == "gemini" and isinstance(best_text, str):
                 start_tag = "<thought>"
                 end_tag = "</thought>"
                 start = best_text.find(start_tag)
@@ -410,7 +476,7 @@ class LLMAdapter:
             pass
 
         result: LLMAdapter.LLMResult = {
-            "provider": provider,
+            "provider": provider_norm,
             "model": model,
             "id": rid,
             "created_at": created_at,
@@ -425,9 +491,7 @@ class LLMAdapter:
         }
         return result
 
-    def build_llm_result(self, resp: Any, *, provider: str, model: str) -> "LLMAdapter.LLMResult":
-        return self.build_llm_result_from_response(resp, provider=provider)
-
+    
     def _get_openai(self) -> OpenAI:
         if self._openai is not None:
             return self._openai
@@ -894,6 +958,102 @@ class LLMAdapter:
             out.append(t)
         return out
 
+    def _wrap_gemini_chatcompletion_as_responses(self, resp: Any, *, resolved_model: str) -> AdapterResponse:
+        """Wrap a Gemini (OpenAI-compatible) chat.completions response into a minimal Responses-like shape.
+
+        This mirrors the compatibility behavior in the original llm_handler, so callers can rely on:
+        - AdapterResponse.output_text
+        - AdapterResponse.output (Responses-style message/content)
+        - AdapterResponse.usage (best-effort)
+        - AdapterResponse.model_response (provider-native response)
+        """
+        def _safe_get(obj: Any, name: str) -> Any:
+            try:
+                if isinstance(obj, dict):
+                    return obj.get(name)
+                return getattr(obj, name, None)
+            except Exception:
+                return None
+
+        # Best-effort text extraction from chat.completions shape
+        text = ""
+        try:
+            choices = _safe_get(resp, "choices")
+            if isinstance(choices, list) and choices:
+                c0 = choices[0]
+                msg = _safe_get(c0, "message")
+                content = _safe_get(msg, "content")
+                if isinstance(content, str):
+                    text = content
+        except Exception:
+            text = ""
+
+        # Best-effort tool call extraction from chat.completions message.tool_calls
+        tool_calls: list[Dict[str, Any]] = []
+        try:
+            choices = _safe_get(resp, "choices")
+            if isinstance(choices, list) and choices:
+                c0 = choices[0]
+                msg = _safe_get(c0, "message")
+                tc_list = _safe_get(msg, "tool_calls")
+                if isinstance(tc_list, list):
+                    for t in tc_list:
+                        t_type = _safe_get(t, "type")
+                        if t_type not in ("function", "tool_call"):
+                            continue
+                        func = _safe_get(t, "function") or t
+                        name = _safe_get(func, "name")
+                        args = _safe_get(func, "arguments")
+                        cid = _safe_get(t, "id")
+                        if isinstance(name, str) and name:
+                            tool_calls.append({"name": name, "arguments": args, "id": cid, "type": "tool_call"})
+        except Exception:
+            tool_calls = []
+
+        # Build a minimal Responses-style output list
+        output_list: list[Dict[str, Any]] = [
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "text", "text": text or ""}],
+            }
+        ]
+        if tool_calls:
+            # Keep tool calls as additional content items
+            output_list[0]["content"].extend(tool_calls)
+
+        # Best-effort usage mapping to Responses-style keys
+        usage_like: Optional[Dict[str, int]] = None
+        try:
+            u = _safe_get(resp, "usage")
+            if u is not None:
+                # OpenAI/Gemini adapter chat.completions typically uses prompt_tokens/completion_tokens/total_tokens
+                def _uget(obj: Any, key: str) -> Any:
+                    if isinstance(obj, dict):
+                        return obj.get(key)
+                    return getattr(obj, key, None)
+
+                pt = _uget(u, "prompt_tokens")
+                ct = _uget(u, "completion_tokens")
+                tt = _uget(u, "total_tokens")
+                usage_like = {
+                    "prompt_tokens": int(pt or 0),
+                    "completion_tokens": int(ct or 0),
+                    "total_tokens": int(tt or ((pt or 0) + (ct or 0))),
+                }
+        except Exception:
+            usage_like = None
+
+        # Wrap as AdapterResponse (Responses-like shim)
+        return AdapterResponse(
+            output_text=text or "",
+            model=resolved_model,
+            usage=usage_like,
+            adapter_response={"output": output_list},
+            model_response=resp,
+            finish_reason=self._extract_finish_reason(resp),
+        )
+
     def create(
         self,
         *,
@@ -914,10 +1074,23 @@ class LLMAdapter:
             kwargs["__model_spec"] = spec
         else:
             provider = (provider or "").strip().lower()
-            if not provider:
-                provider = "openai"
             if not model:
                 raise ValueError("model is required when spec is not provided")
+
+            # If provider not explicitly provided, infer it from the registry.
+            # Prefer registry-key lookup (model as key) and fall back to scanning
+            # for a matching provider-native model name.
+            if not provider:
+                try:
+                    mi = self._lookup_model_info_from_registry(model)
+                    inferred = getattr(mi, "provider", None) if mi is not None else None
+                    if inferred:
+                        provider = str(inferred).strip().lower()
+                except Exception:
+                    provider = ""
+
+            if not provider:
+                provider = "openai"
 
         # Never forward None-valued params to provider SDK calls.
         if isinstance(kwargs, dict) and kwargs:
@@ -1402,6 +1575,12 @@ class LLMAdapter:
 
         messages = input if isinstance(input, list) else [{"role": "user", "content": str(input)}]
         resp = client.chat.completions.create(model=resolved_model, messages=messages, stream=stream, **working_kwargs)
+
+        # For non-streaming calls, wrap Gemini chat.completions into a minimal Responses-like shim
+        # so callers can consistently access output_text/output/usage across providers.
+        if not stream:
+            return self._wrap_gemini_chatcompletion_as_responses(resp, resolved_model=resolved_model)
+
         return resp
 
     def _gemini_embedding_call(self, *, model: str, input: Any, **kwargs: Any):
@@ -1615,6 +1794,7 @@ class _ResponsesFacade:
         return self._handler.create(**kwargs)
 
 
+
 class _EmbeddingsFacade:
     """Drop-in facade that mimics `client.embeddings.create(...)`."""
 
@@ -1625,4 +1805,6 @@ class _EmbeddingsFacade:
         return self._handler.create_embedding(**kwargs)
 
 
+# Default, convenience instance (mirrors prior llm_handler usage pattern).
+# Uses environment variables for API keys/base URLs by default.
 llm_adapter = LLMAdapter()

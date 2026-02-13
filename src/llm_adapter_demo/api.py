@@ -171,7 +171,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
             max_output_tokens=req.max_output_tokens,
         )
 
-        normalized = llm_adapter.build_llm_result(resp, provider=provider, model=str(mi.get("model") or model_key))
+        normalized = llm_adapter.build_llm_result_from_response(resp, provider=provider)
         return ChatResponse(
             ok=True,
             answer_text=normalized.get("text"),
@@ -184,15 +184,9 @@ async def chat(req: ChatRequest) -> ChatResponse:
                 {
                     "calls": [
                         {
-                            "call": "llm_adapter.build_llm_result",
-                            "params": {
-                                "provider": provider,
-                                "model": str(mi.get("model") or model_key),
-                            },
-                        },
-                        {
                             "call": "llm_adapter.build_llm_result_from_response",
                             "params": {
+                                "resp": "<adapter_response attribute from llm_adapter.create()>",
                                 "provider": provider,
                             },
                         },

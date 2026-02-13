@@ -1,0 +1,12 @@
+include README.md
+include LICENSE
+include .env.example
+include Makefile
+include pyproject.toml
+
+recursive-include src *.py
+recursive-include ui *.html *.js *.css
+recursive-include examples *.py
+recursive-include scripts *.sh *.py
+
+global-exclude __pycache__ *.py[cod] .DS_Store

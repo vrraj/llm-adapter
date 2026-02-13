@@ -10,7 +10,7 @@
     <div class="app">
       <header class="header">
         <h2>LLM Adapter Module Testing</h2>
-        <p class="subtitle" style="font-style: italic;">This is a demo of how the LLM Adapter can be <font style ="font-weight: bold">imported as a module</font> in your application. For <font style="font-weight: bold">streaming options</font>, refer to the test scripts in README.md or the examples folder (see examples/test_streaming.py).</p>
+        <p class="subtitle" style="font-style: italic;">Interactive demo for testing <font style="font-weight: bold">LLM Adapter API connectivity</font> and <font style="font-weight: bold">response format comparison</font> across providers. Features real-time parameter mapping, usage tracking, and normalized response processing. For streaming examples, see examples/test_streaming.py.</p>
       <hr>
       <br>
       </header>
@@ -92,7 +92,7 @@
 
         <div class="request-panels">
           <details id="responses_request_details_embed">
-            <summary>LLMAdapter.create_embedding Request</summary>
+            <summary>LLMAdapter.create_embedding() Request</summary>
             <pre id="responses_request_output_embed" class="response-output"></pre>
           </details>
           <details id="format_request_details_embed">
@@ -121,10 +121,9 @@
       </section>
 
       <section class="response-section">
-        <h4>LLM Provider API Response - llm_handler.create()</h4>
+        <h4>LLMAdapter.create() Response</h4>
         <pre id="raw_api_output" class="response-output"></pre>
       </section>
-
       <section class="response-section">
         <h4>Format LLM Response - build_llm_result_from_response()</h4>
         <pre id="normalized_output" class="response-output"></pre>
