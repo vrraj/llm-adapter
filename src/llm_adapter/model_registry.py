@@ -149,7 +149,6 @@ REGISTRY: Dict[str, ModelInfo] = {
             "dimensions": 1536,
             "task_type": "RETRIEVAL_DOCUMENT",
             "output_dimensionality": 1536,
-            "normalize_embedding": False,
         },
         max_tokens_parameter="max_tokens",
     ),

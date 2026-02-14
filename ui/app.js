@@ -35,6 +35,7 @@ async function init() {
   const embedSection = document.getElementById("embed_section");
   const embedInput = document.getElementById("embed_input");
   const normalizeEmbeddingInput = document.getElementById("normalize_embedding_input");
+  const outputDimensionInput = document.getElementById("output_dimension_input");
   const embedResponseSection = document.getElementById("embed_response_section");
   const embeddingOutput = document.getElementById("embedding_output");
 
@@ -161,6 +162,7 @@ async function init() {
         model_key: modelKeySelect.value,
         text: (embedInput.value || "").trim(),
         normalize_embedding: !!normalizeEmbeddingInput.checked,
+        output_dimensionality: outputDimensionInput.value ? Number(outputDimensionInput.value) : undefined,
       },
     };
   }
@@ -168,6 +170,12 @@ async function init() {
   function syncModelParamsPanel() {
     const mi = getSelectedModelInfo();
     const preview = buildResolvedRequestPreview();
+
+    // Set output dimension placeholder to model default for embeddings
+    if (outputDimensionInput && isEmbeddingModel(mi)) {
+      const defaultDim = mi?.capabilities?.output_dimensionality || mi?.capabilities?.dimensions;
+      outputDimensionInput.placeholder = defaultDim ? String(defaultDim) : "auto (from model)";
+    }
 
     const out = {
       model_registry_entry: mi,
@@ -402,6 +410,7 @@ async function init() {
   });
 
   normalizeEmbeddingInput.addEventListener("change", syncModelParamsPanel);
+  outputDimensionInput.addEventListener("input", syncModelParamsPanel);
   embedInput.addEventListener("input", syncModelParamsPanel);
   embedInput.addEventListener("keydown", (evt) => {
     if (evt.key === "Enter" && (evt.metaKey || evt.ctrlKey)) {

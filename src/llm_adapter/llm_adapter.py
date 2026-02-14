@@ -101,6 +101,45 @@ class AdapterEvent:
         self.delta = delta
 
 
+class EmbeddingResponse:
+    """Normalized embedding response structure for all providers.
+    
+    Provides consistent interface across OpenAI, Gemini, and other providers.
+    Always returns direct list of embedding vectors in `data` field.
+    """
+    
+    def __init__(
+        self,
+        data: List[List[float]],
+        usage: Any,
+        provider: str,
+        model: str,
+        normalized: Optional[bool] = None,
+        vector_dim: Optional[int] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        raw: Optional[Any] = None,
+    ):
+        self.data = data  # Always direct list of embedding vectors
+        self.usage = usage  # Standardized usage object
+        self.provider = provider  # Provider identifier
+        self.model = model  # Model used
+        self.normalized = normalized  # Was normalization applied
+        self.vector_dim = vector_dim  # Convenience field
+        self.metadata = metadata or {}  # Rich metadata
+        self.raw = raw  # Original response for debugging
+
+
+class EmbeddingUsage:
+    """Standardized usage information for embedding responses."""
+    
+    def __init__(self, prompt_tokens: int = 0, total_tokens: int = 0):
+        self.prompt_tokens = prompt_tokens
+        self.total_tokens = total_tokens
+    
+    def __repr__(self) -> str:
+        return f"EmbeddingUsage(prompt_tokens={self.prompt_tokens}, total_tokens={self.total_tokens})"
+
+
 class LLMAdapter:
     """Unified LLM interface supporting multiple providers."""
 
@@ -166,6 +205,39 @@ class LLMAdapter:
         except Exception:
             pass
         return None
+
+    def _was_normalization_applied(self, provider: str, **kwargs: Any) -> bool:
+        """Determine if normalization was applied based on provider and parameters."""
+        
+        # Check explicit user request first
+        if "normalize_embedding" in kwargs:
+            return kwargs["normalize_embedding"]
+        
+        # Provider-specific defaults
+        provider_defaults = {
+            "openai": False,        # Never normalizes by default
+            "gemini_native": True,   # Normalizes by default
+            "gemini": False,        # Depends on endpoint
+            "anthropic": False,       # Assume no normalization
+        }
+        
+        return provider_defaults.get(provider, False)
+
+    def _estimate_embedding_cost(self, input_count: int, vector_dim: int, model: str) -> float:
+        """Estimate cost for embedding request."""
+        try:
+            # Get pricing from model registry
+            model_info = self._lookup_model_info_from_registry(model)
+            if model_info and hasattr(model_info, 'pricing'):
+                pricing = model_info.pricing
+                if hasattr(pricing, 'input_per_mm'):
+                    cost_per_token = pricing.input_per_mm / 1_000_000
+                    # Rough token estimation (4 chars = 1 token)
+                    estimated_tokens = input_count * 100  # Rough estimate
+                    return estimated_tokens * cost_per_token
+        except Exception:
+            pass
+        return 0.0  # Default if pricing not available
 
     # ----------------------------
     # Pricing helpers (registry-driven)
@@ -1244,9 +1316,61 @@ class LLMAdapter:
         return client.responses.create(model=resolved_model, input=input, stream=stream, **mapped_kwargs)
 
     def _openai_embedding_call(self, *, model: str, input: Any, **kwargs: Any):
+        import time
+        start_time = time.time()
+        
         client = self._get_openai()
         resolved_model = self._resolve_model_name(model)
-        return client.embeddings.create(model=resolved_model, input=input, **kwargs)
+        raw_response = client.embeddings.create(model=resolved_model, input=input, **kwargs)
+        
+        # Extract embedding vectors from OpenAI response
+        vectors = []
+        for embedding_obj in raw_response.data:
+            vectors.append(embedding_obj.embedding)
+        
+        # Prepare metadata
+        input_texts = input if isinstance(input, list) else [input]
+        
+        metadata = {
+            # Provider context
+            "provider": "openai",
+            "model": resolved_model,
+            "endpoint": "embeddings",
+            
+            # Response characteristics
+            "dimensions": len(vectors[0]) if vectors else None,
+            "vector_type": "dense",
+            "precision": "float32",
+            
+            # Input context
+            "input_texts": input_texts,
+            "input_count": len(input_texts),
+            "processing_order": list(range(len(input_texts))),
+            
+            # Performance and debugging
+            "processing_time": time.time() - start_time,
+            "raw_response_id": getattr(raw_response, 'id', None),
+            "cache_hit": False,
+            "retry_count": 0,
+            
+            # Convenience fields
+            "cost_estimate": self._estimate_embedding_cost(len(input_texts), len(vectors[0]) if vectors else 0, resolved_model),
+            "total_tokens_used": getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0,
+        }
+        
+        return EmbeddingResponse(
+            data=vectors,  # Direct list of embedding vectors
+            usage=EmbeddingUsage(
+                prompt_tokens=getattr(raw_response.usage, 'prompt_tokens', 0) if hasattr(raw_response, 'usage') else 0,
+                total_tokens=getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0
+            ),
+            provider="openai",
+            model=resolved_model,
+            normalized=self._was_normalization_applied("openai", **kwargs),
+            vector_dim=len(vectors[0]) if vectors else None,
+            metadata=metadata,
+            raw=raw_response
+        )
 
     def _gemini_call(self, *, model: str, input: Any, stream: bool, skip_reasoning: bool = False, **kwargs: Any):
         resolved_model = self._resolve_model_name(model)
@@ -1593,6 +1717,9 @@ class LLMAdapter:
 
     def _gemini_embedding_call(self, *, model: str, input: Any, **kwargs: Any):
         """Gemini embedding call via the OpenAI-compatible adapter client."""
+        import time
+        start_time = time.time()
+        
         client = self._get_gemini()
         resolved_model = self._resolve_model_name(model)
 
@@ -1601,14 +1728,17 @@ class LLMAdapter:
             kwargs["dimensions"] = 1536
 
         normalize_embedding = bool(kwargs.pop("normalize_embedding", False))
+        raw_response = client.embeddings.create(model=resolved_model, input=input, **kwargs)
 
-        resp = client.embeddings.create(model=resolved_model, input=input, **kwargs)
-
-        if normalize_embedding and hasattr(resp, "data"):
+        # Extract embedding vectors from Gemini OpenAI-compatible response
+        vectors = []
+        magnitudes = []
+        
+        if normalize_embedding and hasattr(raw_response, "data"):
             try:
                 import math as _math
 
-                for item in resp.data:
+                for item in raw_response.data:
                     vec = getattr(item, "embedding", None)
                     if isinstance(vec, list) and vec:
                         s = 0.0
@@ -1619,6 +1749,7 @@ class LLMAdapter:
                                 fx = 0.0
                             s += fx * fx
                         n = _math.sqrt(s)
+                        magnitudes.append(n)
                         if n > 0.0:
                             item.embedding = [float(x) / n for x in vec]
                             setattr(item, "magnitude", n)
@@ -1626,33 +1757,112 @@ class LLMAdapter:
                             setattr(item, "provider", "gemini_adapter")
             except Exception:
                 pass
+        
+        # Extract vectors for normalized response
+        for item in raw_response.data:
+            vec = getattr(item, "embedding", None)
+            if isinstance(vec, list) and vec:
+                vectors.append(vec)
+            elif not normalize_embedding:
+                # If not normalized, extract the original vector
+                vectors.append(vec if isinstance(vec, list) else [])
+        
+        # Calculate magnitudes if not already calculated
+        if not magnitudes and vectors:
+            try:
+                import numpy as _np
+                magnitudes = [float(_np.linalg.norm(_np.asarray(v, dtype="float32"))) for v in vectors]
+            except Exception:
+                magnitudes = [1.0] * len(vectors)
 
-        return resp
+        # Prepare metadata
+        input_texts = input if isinstance(input, list) else [input]
+        
+        metadata = {
+            # Provider context
+            "provider": "gemini",
+            "model": resolved_model,
+            "endpoint": "embeddings",
+            
+            # Response characteristics
+            "dimensions": len(vectors[0]) if vectors else None,
+            "vector_type": "dense",
+            "precision": "float32",
+            
+            # Input context
+            "input_texts": input_texts,
+            "input_count": len(input_texts),
+            "processing_order": list(range(len(input_texts))),
+            
+            # Provider-specific
+            "dimensions_requested": kwargs.get("dimensions", 1536),
+            
+            # Magnitude information
+            "magnitudes": magnitudes,
+            
+            # Performance and debugging
+            "processing_time": time.time() - start_time,
+            "cache_hit": False,
+            "retry_count": 0,
+            
+            # Convenience fields
+            "cost_estimate": self._estimate_embedding_cost(len(input_texts), len(vectors[0]) if vectors else 0, model),
+            "total_tokens_used": getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0,
+        }
+
+        return EmbeddingResponse(
+            data=vectors,  # Direct list of embedding vectors
+            usage=EmbeddingUsage(
+                prompt_tokens=getattr(raw_response.usage, 'prompt_tokens', 0) if hasattr(raw_response, 'usage') else 0,
+                total_tokens=getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0
+            ),
+            provider="gemini",
+            model=resolved_model,
+            normalized=normalize_embedding,
+            vector_dim=len(vectors[0]) if vectors else None,
+            metadata=metadata,
+            raw=raw_response
+        )
 
     def _gemini_native_embedding_call(self, *, model: str, input: Any, **kwargs: Any):
         """Gemini embedding call via the native google-genai SDK."""
+        import time
+        start_time = time.time()
+        
         client = self._get_gemini_native()
         resolved_model = self._resolve_model_name(model)
 
         contents = input if isinstance(input, list) else str(input)
 
-        default_task_type = None
-        default_output_dim = None
-        default_normalize = False
+        # Get model capabilities for filtering
+        model_caps = {}
         try:
             mi = self._lookup_model_info_from_registry(model)
-            caps = getattr(mi, "capabilities", {}) or {}
-            default_task_type = caps.get("task_type")
-            default_output_dim = caps.get("output_dimensionality") or caps.get("dimensions")
-            default_normalize = bool(caps.get("normalize_embedding", False))
+            model_caps = getattr(mi, "capabilities", {}) or {}
+            model_caps = dict(model_caps)  # Make a mutable copy
         except Exception:
-            default_task_type = None
-            default_output_dim = None
+            model_caps = {}
 
-        task_type = kwargs.pop("task_type", default_task_type)
-        output_dim = kwargs.pop("output_dimensionality", default_output_dim)
-        normalize_embedding = bool(kwargs.pop("normalize_embedding", default_normalize))
-
+        # Extract adapter-level parameters before capability filtering
+        normalize_embedding = bool(kwargs.pop("normalize_embedding", False))
+        
+        # Apply capability filtering logic
+        filtered_kwargs = {}
+        
+        # For each capability in model registry:
+        for cap_name, cap_value in model_caps.items():
+            if cap_value is False:
+                # If capability is False, drop it from kwargs even if user passed it
+                kwargs.pop(cap_name, None)
+            elif cap_value not in [True, False]:
+                # If capability has a non-boolean value, use as default unless overridden
+                filtered_kwargs[cap_name] = kwargs.pop(cap_name, cap_value)
+        
+        # Merge filtered capabilities with remaining kwargs
+        kwargs = {**filtered_kwargs, **kwargs}
+        
+        task_type = kwargs.pop("task_type", model_caps.get("task_type"))
+        output_dim = kwargs.pop("output_dimensionality", model_caps.get("output_dimensionality"))
         cfg = None
         if task_type is not None or output_dim is not None:
             try:
@@ -1664,9 +1874,9 @@ class LLMAdapter:
                 )
             except Exception:
                 cfg = None
-
+        
         try:
-            resp = client.models.embed_content(
+            raw_response = client.models.embed_content(
                 model=resolved_model,
                 contents=contents,
                 config=cfg,
@@ -1680,9 +1890,10 @@ class LLMAdapter:
                 message=str(e),
             ) from e
 
+        # Extract embedding vectors from Gemini response
         vectors: list[list[float]] = []
         try:
-            emb_list = getattr(resp, "embeddings", None)
+            emb_list = getattr(raw_response, "embeddings", None)
             if isinstance(emb_list, list):
                 for emb in emb_list:
                     vals = getattr(emb, "values", None)
@@ -1691,8 +1902,10 @@ class LLMAdapter:
         except Exception:
             vectors = []
 
+        # Calculate magnitudes
         magnitudes: list[float] = []
         if normalize_embedding and vectors:
+            
             try:
                 import numpy as _np  # type: ignore
 
@@ -1700,9 +1913,11 @@ class LLMAdapter:
                 for v in vectors:
                     arr = _np.asarray(v, dtype="float32")
                     n = float(_np.linalg.norm(arr))
-                    magnitudes.append(n)
                     if n > 0.0:
                         arr = arr / n
+                        magnitudes.append(1.0)  # Normalized magnitude is always 1.0
+                    else:
+                        magnitudes.append(0.0)  # Zero vector stays zero
                     normalized.append(arr.tolist())
                 vectors = normalized
             except Exception:
@@ -1715,19 +1930,14 @@ class LLMAdapter:
             except Exception:
                 magnitudes = [1.0] * len(vectors)
 
+        # Extract usage information
         usage = None
         try:
-            um = getattr(resp, "usage_metadata", None)
+            um = getattr(raw_response, "usage_metadata", None)
             if um is not None:
                 pt = getattr(um, "prompt_token_count", 0) or 0
                 tt = getattr(um, "total_token_count", 0) or 0
-
-                class _EmbeddingUsageShim:
-                    def __init__(self, prompt_tokens: int, total_tokens: int) -> None:
-                        self.prompt_tokens = prompt_tokens
-                        self.total_tokens = total_tokens
-
-                usage = _EmbeddingUsageShim(prompt_tokens=int(pt), total_tokens=int(tt or pt))
+                usage = EmbeddingUsage(prompt_tokens=int(pt), total_tokens=int(tt or pt))
         except Exception:
             usage = None
 
@@ -1738,42 +1948,57 @@ class LLMAdapter:
                 else:
                     total_text = str(contents)
                 approx = self._estimate_embedding_tokens(total_text)
-
-                class _EmbeddingUsageShim:
-                    def __init__(self, prompt_tokens: int, total_tokens: int) -> None:
-                        self.prompt_tokens = prompt_tokens
-                        self.total_tokens = total_tokens
-
-                usage = _EmbeddingUsageShim(prompt_tokens=approx, total_tokens=approx)
+                usage = EmbeddingUsage(prompt_tokens=approx, total_tokens=approx)
             except Exception:
-                class _EmbeddingUsageShim:
-                    def __init__(self, prompt_tokens: int, total_tokens: int) -> None:
-                        self.prompt_tokens = prompt_tokens
-                        self.total_tokens = total_tokens
+                usage = EmbeddingUsage(prompt_tokens=0, total_tokens=0)
 
-                usage = _EmbeddingUsageShim(prompt_tokens=0, total_tokens=0)
+        # Prepare metadata
+        input_texts = input if isinstance(input, list) else [input]
+        
+        metadata = {
+            # Provider context
+            "provider": "gemini_native",
+            "model": resolved_model,
+            "endpoint": "embed_content",
+            
+            # Response characteristics
+            "dimensions": len(vectors[0]) if vectors else None,
+            "vector_type": "dense",
+            "precision": "float32",
+            
+            # Input context
+            "input_texts": input_texts,
+            "input_count": len(input_texts),
+            "processing_order": list(range(len(input_texts))),
+            
+            # Provider-specific
+            "task_type": task_type,
+            "output_dimensionality": output_dim,
+            "google_project": getattr(client, '_project_id', None),
+            
+            # Magnitude information
+            "magnitudes": magnitudes,
+            
+            # Performance and debugging
+            "processing_time": time.time() - start_time,
+            "cache_hit": False,
+            "retry_count": 0,
+            
+            # Convenience fields
+            "cost_estimate": self._estimate_embedding_cost(len(input_texts), len(vectors[0]) if vectors else 0, model),
+            "total_tokens_used": getattr(usage, 'total_tokens', 0) if usage else 0,
+        }
 
-        class _EmbeddingItem:
-            def __init__(self, embedding, magnitude=None, normalized=False, provider="gemini_native"):
-                self.embedding = embedding
-                self.magnitude = magnitude
-                self.normalized = normalized
-                self.provider = provider
-
-        class _EmbeddingResponse:
-            def __init__(self, vectors, usage_obj, magnitudes, normalize_embedding):
-                self.data = [
-                    _EmbeddingItem(
-                        v,
-                        magnitude=magnitudes[i] if i < len(magnitudes) else None,
-                        normalized=normalize_embedding,
-                        provider="gemini_native",
-                    )
-                    for i, v in enumerate(vectors)
-                ]
-                self.usage = usage_obj
-
-        return _EmbeddingResponse(vectors, usage, magnitudes, normalize_embedding)
+        return EmbeddingResponse(
+            data=vectors,  # Direct list of embedding vectors
+            usage=usage,
+            provider="gemini_native",
+            model=resolved_model,
+            normalized=normalize_embedding,
+            vector_dim=len(vectors[0]) if vectors else None,
+            metadata=metadata,
+            raw=raw_response
+        )
 
     def _estimate_embedding_tokens(self, text: Any) -> int:
         """Best-effort token estimate for embeddings when provider usage is missing."""

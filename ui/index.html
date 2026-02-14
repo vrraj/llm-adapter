@@ -83,7 +83,9 @@
         <label for="embed_input">Embedding input</label>
         <textarea id="embed_input" rows="3" placeholder="Text to embed..."></textarea>
         <div class="field" style="margin-top: 12px;">
-          <div class="checkbox-row">
+          <div class="field-row">
+            <label for="output_dimension_input">Output dimension</label>
+            <input id="output_dimension_input" type="number" step="1" min="1" placeholder="auto (from model)" />
             <input id="normalize_embedding_input" type="checkbox" />
             <label for="normalize_embedding_input">Normalize embedding</label>
           </div>

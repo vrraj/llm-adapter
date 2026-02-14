@@ -58,13 +58,13 @@ The PyPI package includes the core library only. The demo UI and helper scripts 
 
 Set required API keys (see **Environment variables** section below).
 
-Save the following as `test_llm_adapter.py`, then run:
+Save the following code as `test_llm_adapter.py`, then run:
 
 ```bash
 python test_llm_adapter.py
 ```
 
-Notes:
+**Notes:**
 - The script below uses **OpenAI registry model keys** (`openai:...`).
 - To test Gemini, swap the model keys (from model_registry - `src/llm_adapter/model_registry.py`) to `gemini:native-sdk-3-flash-preview` (generation) and `gemini:native-embed` (embeddings).
 
@@ -73,7 +73,7 @@ from llm_adapter import llm_adapter
 
 # Chat
 resp = llm_adapter.create(
-    model="openai:gpt-4o-mini",  # provider derived from model registry
+    model="openai:gpt-4o-mini",  # key in model registry
     input=[{"role": "user", "content": "Hello"}],
     max_output_tokens=200,
 )
@@ -83,11 +83,12 @@ print(f"Usage: {getattr(resp, 'usage', 'Usage info not available')}")
 
 # Embeddings
 emb_resp = llm_adapter.create_embedding(
-    model="openai:embed_small",  # provider derived from model registry
-    input="Hello world"
+    model="openai:embed_small",  # key in model registry
+    input=["Hello world", "How are you?", "This is a test"]
 )
 print("Embedding Response:")
-print(f"Embedding (Truncated): {str(emb_resp.data)[:100]}...")
+for i, emb in enumerate(emb_resp.data):
+    print(f"Embedding {i+1} (First 7 vectors): {emb[:7]}...")
 print(f"Usage: {getattr(emb_resp, 'usage', 'Usage info not available')}")
 ```
 
@@ -102,7 +103,7 @@ git clone https://github.com/vrraj/llm-adapter.git
 cd llm-adapter
 bash scripts/llm_adapter_setup.sh
 ```
->This script (scripts/llm_adapter_setup.sh) checks prerequisites (`python3`, `make`), creates `.env` if missing (from `.env.example` when available), sets up a local `.venv`, installs the package in editable mode (`pip install -e .`), and prints next steps. Safe to run multiple times.
+>This script (scripts/llm_adapter_setup.sh) checks prerequisites (`python3`, `make`), creates `.env` if missing, sets up a local `.venv`, installs the package (`pip install -e .`), and shows **next steps*. The demo UI and FastAPI server run in this `.venv` virtual environmen. Safe to run multiple times.
 
 2. Set required API keys (see **Environment variables** section below).
 
@@ -194,6 +195,118 @@ This standalone package uses these routing semantics:
 4. **Capability filtering (registry-driven)**
    - Drop known parameters that are explicitly unsupported for that model (e.g. `temperature`, `top_p`, `reasoning_effort`, `stream`, `tools`).
    - Unknown kwargs are generally passed through and may be accepted/rejected by the downstream SDK.
+
+## Capability Filtering System
+
+The adapter uses a **registry-driven capability filtering system** to ensure parameters are handled appropriately for each model. This provides model-agnostic behavior while respecting model-specific constraints.
+
+### How Capability Filtering Works
+
+For each model in the registry, capabilities are defined with three types of values:
+
+1. **`False`** - Parameter is **unsupported** and **removed** from kwargs (even if user passes it)
+2. **`True`** - Parameter is **supported** and **passed through** to the underlying LLM
+3. **Non-boolean values** - Parameter has a **default value** that can be overridden by user
+
+### Example: Model Registry Capabilities
+
+```python
+# In src/llm_adapter/model_registry.py
+"gemini:native-embed": ModelInfo(
+    key="gemini:native-embed",
+    provider="gemini",
+    model="gemini-embedding-001",
+    endpoint="embed_content",
+    capabilities={
+        "dimensions": 1536,                    # Default value
+        "task_type": "RETRIEVAL_DOCUMENT",      # Default value  
+        "output_dimensionality": 1536,           # Default value
+        "normalize_embedding": False,              # Unsupported - always dropped
+    },
+),
+```
+
+### Filtering Logic Examples
+
+#### Example 1: Parameter with `False` capability
+
+```python
+# User passes normalize_embedding=True
+llm_adapter.create_embedding(
+    model="gemini:native-embed",
+    input=["test"],
+    normalize_embedding=True  # User wants this
+)
+
+# Result: normalize_embedding is DROPPED (capability=False)
+# Adapter handles normalization internally instead of passing to LLM
+```
+
+#### Example 2: Parameter with default value capability
+
+```python
+# User passes custom task_type
+llm_adapter.create_embedding(
+    model="gemini:native-embed", 
+    input=["test"],
+    task_type="RETRIEVAL_QUERY"  # Override default "RETRIEVAL_DOCUMENT"
+)
+
+# Result: task_type="RETRIEVAL_QUERY" passed to LLM
+```
+
+#### Example 3: Unknown parameter (not in capabilities)
+
+```python
+# User passes unknown parameter
+llm_adapter.create_embedding(
+    model="gemini:native-embed",
+    input=["test"], 
+    unknown_param="value"  # Not in capabilities
+)
+
+# Result: unknown_param="value" passed through to LLM
+# May be accepted or rejected by downstream SDK
+```
+
+### Special Case: Adapter-Level Parameters
+
+Some parameters (like `normalize_embedding`) are handled by the **adapter layer**, not the underlying LLM:
+
+```python
+# Extract adapter-level parameters BEFORE capability filtering
+normalize_embedding = bool(kwargs.pop("normalize_embedding", False))
+
+# Then apply capability filtering to remaining kwargs
+# normalize_embedding is handled by adapter, never passed to LLM
+```
+
+### Forcing a False Capability
+
+If a user specifically needs to pass a parameter that's marked as `False` in capabilities:
+
+```python
+# This WON'T work - parameter gets dropped
+llm_adapter.create_embedding(
+    model="gemini:native-embed",
+    input=["test"],
+    normalize_embedding=False  # Still gets dropped due to capability=False
+)
+
+# Solution: Pass through unknown kwargs
+llm_adapter.create_embedding(
+    model="gemini:native-embed", 
+    input=["test"],
+    custom_normalize_embedding=False  # Unknown parameter, passes through
+)
+```
+
+### Benefits
+
+- **Model safety**: Prevents unsupported parameters from reaching LLMs
+- **Consistent behavior**: Same parameter works across different models when supported
+- **Graceful degradation**: Unknown parameters pass through for future compatibility
+- **Adapter-level features**: Parameters like `normalize_embedding` work regardless of LLM support
 
 5. **Reasoning effort mapping/defaults (registry-driven)**
    - Map `reasoning_effort` into provider-specific parameters using `ModelInfo.reasoning_parameter` (Gemini examples: `thinking_level`, `thinking_budget`).
@@ -361,16 +474,22 @@ Unified embeddings entrypoint across providers.
 
 ```python
 emb = llm_adapter.create_embedding(
-    provider: Optional[str] = None,
-    model: str,
+    model: str,  # Registry key (e.g., "openai:embed_small") or provider-native model name
     input: str | list[str],
     **kwargs
 )
 ```
+**Note:**: For Gemini native embeddings, requesting a lower `output_dimensionality` (e.g. 768 for a 1536 embedding model), passing `normalize_embedding=True` will normalize vectors to unit length.
 
-- Infers provider from registry key when possible.
-- Routes to OpenAI embeddings or Gemini `embed_content`.
-- Returns provider-native embedding response.
+Returns `EmbeddingResponse` with normalized structure across providers:
+  - `data`: List of embedding vectors (each vector is List)
+  - `usage`: Usage information (prompt_tokens, total_tokens)
+  - `provider`: Provider identifier (e.g., "openai", "gemini")
+  - `model`: Model name used
+  - `normalized`: True if vectors were normalized to unit length
+  - `vector_dim`: Output dimension vectors
+  - `metadata`: Dictionary with additional metadata (magnitudes, task_type, etc.)
+  - `raw`: Original provider response for debugging
 
 ---
 
