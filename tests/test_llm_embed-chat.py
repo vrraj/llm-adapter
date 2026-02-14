@@ -65,7 +65,6 @@ def test_embedding_multiple_inputs():
         # Test metadata
         print(f"Magnitudes: {emb_resp.metadata.get('magnitudes', 'No magnitudes')}")
         print(f"Processing time: {emb_resp.metadata.get('processing_time', 'No time')}")
-        print(f"Cost estimate: {emb_resp.metadata.get('cost_estimate', 'No cost')}")
         print(f"Usage: {getattr(emb_resp, 'usage', 'Usage info not available')}")
         print(f"Provider: {getattr(emb_resp, 'provider', 'No provider')}")
         print(f"Model: {getattr(emb_resp, 'model', 'No model')}")

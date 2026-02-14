@@ -213,31 +213,15 @@ class LLMAdapter:
         if "normalize_embedding" in kwargs:
             return kwargs["normalize_embedding"]
         
-        # Provider-specific defaults
+        # Provider-specific defaults - match actual implementation
         provider_defaults = {
             "openai": False,        # Never normalizes by default
-            "gemini_native": True,   # Normalizes by default
+            "gemini_native": False,  # Only normalizes if explicitly requested
             "gemini": False,        # Depends on endpoint
             "anthropic": False,       # Assume no normalization
         }
         
         return provider_defaults.get(provider, False)
-
-    def _estimate_embedding_cost(self, input_count: int, vector_dim: int, model: str) -> float:
-        """Estimate cost for embedding request."""
-        try:
-            # Get pricing from model registry
-            model_info = self._lookup_model_info_from_registry(model)
-            if model_info and hasattr(model_info, 'pricing'):
-                pricing = model_info.pricing
-                if hasattr(pricing, 'input_per_mm'):
-                    cost_per_token = pricing.input_per_mm / 1_000_000
-                    # Rough token estimation (4 chars = 1 token)
-                    estimated_tokens = input_count * 100  # Rough estimate
-                    return estimated_tokens * cost_per_token
-        except Exception:
-            pass
-        return 0.0  # Default if pricing not available
 
     # ----------------------------
     # Pricing helpers (registry-driven)
@@ -1332,18 +1316,12 @@ class LLMAdapter:
         input_texts = input if isinstance(input, list) else [input]
         
         metadata = {
-            # Provider context
-            "provider": "openai",
-            "model": resolved_model,
-            "endpoint": "embeddings",
-            
             # Response characteristics
             "dimensions": len(vectors[0]) if vectors else None,
             "vector_type": "dense",
             "precision": "float32",
             
             # Input context
-            "input_texts": input_texts,
             "input_count": len(input_texts),
             "processing_order": list(range(len(input_texts))),
             
@@ -1354,14 +1332,16 @@ class LLMAdapter:
             "retry_count": 0,
             
             # Convenience fields
-            "cost_estimate": self._estimate_embedding_cost(len(input_texts), len(vectors[0]) if vectors else 0, resolved_model),
             "total_tokens_used": getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0,
         }
         
         return EmbeddingResponse(
             data=vectors,  # Direct list of embedding vectors
             usage=EmbeddingUsage(
-                prompt_tokens=getattr(raw_response.usage, 'prompt_tokens', 0) if hasattr(raw_response, 'usage') else 0,
+                prompt_tokens=(
+                    getattr(raw_response.usage, 'input_tokens', 0) if hasattr(raw_response, 'usage') else 0 or
+                    getattr(raw_response.usage, 'prompt_tokens', 0) if hasattr(raw_response, 'usage') else 0
+                ),
                 total_tokens=getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0
             ),
             provider="openai",
@@ -1779,18 +1759,12 @@ class LLMAdapter:
         input_texts = input if isinstance(input, list) else [input]
         
         metadata = {
-            # Provider context
-            "provider": "gemini",
-            "model": resolved_model,
-            "endpoint": "embeddings",
-            
             # Response characteristics
             "dimensions": len(vectors[0]) if vectors else None,
             "vector_type": "dense",
             "precision": "float32",
             
             # Input context
-            "input_texts": input_texts,
             "input_count": len(input_texts),
             "processing_order": list(range(len(input_texts))),
             
@@ -1806,14 +1780,16 @@ class LLMAdapter:
             "retry_count": 0,
             
             # Convenience fields
-            "cost_estimate": self._estimate_embedding_cost(len(input_texts), len(vectors[0]) if vectors else 0, model),
             "total_tokens_used": getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0,
         }
 
         return EmbeddingResponse(
             data=vectors,  # Direct list of embedding vectors
             usage=EmbeddingUsage(
-                prompt_tokens=getattr(raw_response.usage, 'prompt_tokens', 0) if hasattr(raw_response, 'usage') else 0,
+                prompt_tokens=(
+                    getattr(raw_response.usage, 'input_tokens', 0) if hasattr(raw_response, 'usage') else 0 or
+                    getattr(raw_response.usage, 'prompt_tokens', 0) if hasattr(raw_response, 'usage') else 0
+                ),
                 total_tokens=getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0
             ),
             provider="gemini",
@@ -1953,23 +1929,15 @@ class LLMAdapter:
                 usage = EmbeddingUsage(prompt_tokens=0, total_tokens=0)
 
         # Prepare metadata
-        input_texts = input if isinstance(input, list) else [input]
-        
         metadata = {
-            # Provider context
-            "provider": "gemini_native",
-            "model": resolved_model,
-            "endpoint": "embed_content",
-            
             # Response characteristics
             "dimensions": len(vectors[0]) if vectors else None,
             "vector_type": "dense",
             "precision": "float32",
             
             # Input context
-            "input_texts": input_texts,
-            "input_count": len(input_texts),
-            "processing_order": list(range(len(input_texts))),
+            "input_count": len(input) if isinstance(input, list) else 1,
+            "processing_order": list(range(len(input) if isinstance(input, list) else 1)),
             
             # Provider-specific
             "task_type": task_type,
@@ -1985,7 +1953,6 @@ class LLMAdapter:
             "retry_count": 0,
             
             # Convenience fields
-            "cost_estimate": self._estimate_embedding_cost(len(input_texts), len(vectors[0]) if vectors else 0, model),
             "total_tokens_used": getattr(usage, 'total_tokens', 0) if usage else 0,
         }
 
