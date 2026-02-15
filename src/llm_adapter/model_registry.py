@@ -23,7 +23,7 @@ class ModelInfo:
     endpoint: Endpoint
     pricing: Optional[Pricing]
     capabilities: Dict[str, Any] = field(default_factory=dict)
-    max_tokens_parameter: str = "max_output_tokens"
+    limits: Dict[str, Any] = field(default_factory=dict)
     thinking_tax: Dict[str, Any] = field(default_factory=dict)
     reasoning_parameter: Optional[Tuple[str, Any]] = None
 
@@ -35,8 +35,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="text-embedding-3-small",
         endpoint="embeddings",
         pricing=Pricing(input_per_mm=0.02, output_per_mm=0.0),
-        capabilities={"dimensions": 1536},
-        max_tokens_parameter="max_output_tokens",
+        capabilities={
+            "dimensions": 1536,
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
+        },
     ),
     "openai:embed_large": ModelInfo(
         key="openai:embed_large",
@@ -44,8 +46,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="text-embedding-3-large",
         endpoint="embeddings",
         pricing=Pricing(input_per_mm=0.13, output_per_mm=0.0),
-        capabilities={"dimensions": 3072},
-        max_tokens_parameter="max_output_tokens",
+        capabilities={
+            "dimensions": 3072,
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
+        },
     ),
     "openai:gpt-4o-mini": ModelInfo(
         key="openai:gpt-4o-mini",
@@ -53,14 +57,17 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="gpt-4o-mini",
         endpoint="responses",
         pricing=Pricing(input_per_mm=0.15, output_per_mm=0.60, cached_input_per_mm=0.075),
+        limits={
+            "max_output_tokens": 800
+        },
         capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
             "tools": True,
             "stream": True,
             "temperature": True,
             "reasoning_effort": False,
             "top_p": True,
         },
-        max_tokens_parameter="max_output_tokens",
     ),
     "openai:gpt-4o": ModelInfo(
         key="openai:gpt-4o",
@@ -68,14 +75,17 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="gpt-4o",
         endpoint="responses",
         pricing=Pricing(input_per_mm=2.50, output_per_mm=10.00, cached_input_per_mm=1.25),
+        limits={
+            "max_output_tokens": 800
+        },
         capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
             "tools": True,
             "stream": True,
             "temperature": True,
             "reasoning_effort": False,
             "top_p": True,
         },
-        max_tokens_parameter="max_output_tokens",
     ),
     "openai:chat_gpt-4o-mini": ModelInfo(
         key="openai:chat_gpt-4o-mini",
@@ -83,14 +93,17 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="gpt-4o-mini",
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=0.15, output_per_mm=0.60, cached_input_per_mm=0.075),
+        limits={
+            "max_output_tokens": 800
+        },
         capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
             "tools": True,
             "stream": True,
             "temperature": True,
             "reasoning_effort": False,
             "top_p": True,
         },
-        max_tokens_parameter="max_completion_tokens",
     ),
     "openai:chat_gpt-4o": ModelInfo(
         key="openai:chat_gpt-4o",
@@ -98,14 +111,17 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="gpt-4o",
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=2.50, output_per_mm=10.00, cached_input_per_mm=1.25),
+        limits={
+            "max_output_tokens": 800
+        },
         capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
             "tools": True,
             "stream": True,
             "temperature": True,
             "reasoning_effort": False,
             "top_p": True,
         },
-        max_tokens_parameter="max_completion_tokens",
     ),
     "openai:reasoning_gpt-4o-mini": ModelInfo(
         key="openai:reasoning_gpt-4o-mini",
@@ -113,14 +129,17 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="o3-mini",
         endpoint="responses",
         pricing=Pricing(input_per_mm=1.10, output_per_mm=4.40),
+        limits={
+            "max_output_tokens": 800
+        },
         capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
             "tools": True,
             "stream": False,
             "temperature": False,
             "reasoning_effort": True,
             "top_p": False,
         },
-        max_tokens_parameter="max_output_tokens",
         reasoning_parameter=("reasoning_effort", "low"),
     ),
     "openai:reasoning_gpt-5-mini": ModelInfo(
@@ -129,14 +148,17 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="gpt-5-mini",
         endpoint="responses",
         pricing=Pricing(input_per_mm=0.25, output_per_mm=2.00),
+        limits={
+            "max_output_tokens": 800
+        },
         capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
             "tools": True,
             "stream": False,
             "temperature": False,
             "reasoning_effort": True,
             "top_p": False,
         },
-        max_tokens_parameter="max_output_tokens",
         reasoning_parameter=("reasoning_effort", "minimal"),
     ),
     "gemini:native-embed": ModelInfo(
@@ -146,11 +168,11 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="embed_content",
         pricing=Pricing(input_per_mm=0.10, output_per_mm=0.0),
         capabilities={
+            "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
             "dimensions": 1536,
             "task_type": "RETRIEVAL_DOCUMENT",
             "output_dimensionality": 1536,
         },
-        max_tokens_parameter="max_tokens",
     ),
     "gemini:openai-2.5-flash-lite": ModelInfo(
         key="gemini:openai-2.5-flash-lite",
@@ -158,14 +180,17 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="models/gemini-2.5-flash-lite",
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=0.20, output_per_mm=0.80),
+        limits={
+            "max_output_tokens": 800
+        },
         capabilities={
+            "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
             "tools": True,
             "stream": True,
             "temperature": True,
             "reasoning_effort": False,
             "top_p": True,
         },
-        max_tokens_parameter="max_completion_tokens",
         thinking_tax={
             "effort_map": {
                 "none": {"reserve_ratio": 0.0},
@@ -182,14 +207,17 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="models/gemini-3-flash-preview",
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=0.50, output_per_mm=3.00),
+        limits={
+            "max_output_tokens": 800
+        },
         capabilities={
+            "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
             "tools": True,
             "stream": True,
             "temperature": True,
             "reasoning_effort": True,
             "top_p": True,
         },
-        max_tokens_parameter="max_completion_tokens",
         reasoning_parameter=("thinking_level", "minimal"),
         thinking_tax={
             "effort_map": {
@@ -216,13 +244,16 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="gemini_sdk",
         pricing=Pricing(input_per_mm=0.50, output_per_mm=3.00),
         capabilities={
+            "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
             "tools": True,
             "stream": True,
             "temperature": True,
             "reasoning_effort": True,
             "top_p": True,
         },
-        max_tokens_parameter="max_completion_tokens",
+        limits={
+            "max_output_tokens": 800
+        },
         reasoning_parameter=("thinking_level", "low"),
         thinking_tax={
             "effort_map": {
@@ -249,13 +280,16 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=0.30, output_per_mm=2.50),
         capabilities={
+            "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
             "tools": True,
             "stream": True,
             "temperature": True,
             "reasoning_effort": True,
             "top_p": True,
         },
-        max_tokens_parameter="max_completion_tokens",
+        limits={
+            "max_output_tokens": 800
+        },
         reasoning_parameter=("thinking_budget", 1000),
         thinking_tax={
             "effort_map": {
@@ -274,13 +308,16 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="gemini_sdk",
         pricing=Pricing(input_per_mm=0.30, output_per_mm=2.50),
         capabilities={
+            "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
             "tools": True,
             "stream": True,
             "temperature": True,
             "reasoning_effort": True,
             "top_p": True,
         },
-        max_tokens_parameter="max_completion_tokens",
+        limits={
+            "max_output_tokens": 800
+        },
         reasoning_parameter=("thinking_budget", 1000),
         thinking_tax={
             "effort_map": {

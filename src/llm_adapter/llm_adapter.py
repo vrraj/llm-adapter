@@ -60,13 +60,16 @@ class AdapterResponse:
         output_text: str,
         model: str,
         usage: Optional[Dict[str, int]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         adapter_response: Any | None = None,
         model_response: Any | None = None,
+        status: Optional[str] = None,
         finish_reason: Optional[str] = None,
     ):
         self.output_text = output_text
         self.model = model
         self.usage = usage
+        self.metadata = metadata or {}
 
         self.adapter_response = adapter_response
         try:
@@ -90,6 +93,7 @@ class AdapterResponse:
         except Exception:
             self.model_response = None
 
+        self.status = status
         self.finish_reason = finish_reason
 
 
@@ -206,6 +210,23 @@ class LLMAdapter:
             pass
         return None
 
+    def _map_completion_status_from_finish_reason(self, finish_reason: Optional[str]) -> str:
+        fr = (str(finish_reason or "").strip() or "").lower()
+        if fr in ("length", "max_output_tokens", "max_tokens", "max_tokens_exceeded", "max_tokens_reached", "max_tokens_limit"):
+            return "incomplete"
+        if fr:
+            return "completed"
+        return "completed"
+
+    def _map_gemini_native_status_from_finish_reason(self, finish_reason: Optional[str]) -> str:
+        fr_raw = str(finish_reason or "").strip()
+        fr = fr_raw.upper()
+        if fr.endswith("MAX_TOKENS") or fr == "MAX_TOKENS":
+            return "incomplete"
+        if fr.endswith("STOP") or fr == "STOP":
+            return "completed"
+        return "completed"
+
     def _was_normalization_applied(self, provider: str, **kwargs: Any) -> bool:
         """Determine if normalization was applied based on provider and parameters."""
         
@@ -308,18 +329,80 @@ class LLMAdapter:
             created_at = None
 
         try:
-            status = getattr(resp, "status", None) or "completed"
+            st_attr = getattr(resp, "status", None)
         except Exception:
+            st_attr = None
+
+        status: Optional[str] = None
+        if st_attr is not None:
+            try:
+                status = str(st_attr).strip() or None
+            except Exception:
+                status = None
+        if not status:
             status = "completed"
 
-        finish_reason: Optional[str] = self._extract_finish_reason(resp)
+        finish_reason: Optional[str] = None
+        try:
+            fr_attr = getattr(resp, "finish_reason", None)
+            if fr_attr is not None:
+                finish_reason = str(fr_attr).strip() or None
+        except Exception:
+            finish_reason = None
+
+        if finish_reason is None:
+            fr2 = self._extract_finish_reason(resp)
+            if fr2 is not None:
+                try:
+                    finish_reason = str(fr2).strip() or None
+                except Exception:
+                    finish_reason = None
         if finish_reason is None:
             try:
                 incomplete = getattr(resp, "incomplete_details", None)
                 if incomplete is not None:
-                    finish_reason = getattr(incomplete, "reason", None)
+                    r = getattr(incomplete, "reason", None)
+                    if r is not None:
+                        finish_reason = str(r).strip() or None
             except Exception:
                 finish_reason = None
+
+        if finish_reason is None and provider_norm == "gemini":
+            try:
+                candidates = getattr(resp, "candidates", None)
+                if isinstance(candidates, list) and candidates:
+                    cand0 = candidates[0]
+                    fr = getattr(cand0, "finish_reason", None)
+                    if fr is None:
+                        fr = getattr(cand0, "finishReason", None)
+                    if fr is not None:
+                        finish_reason = str(fr).strip() or None
+            except Exception:
+                finish_reason = None
+
+        # Derive status from finish_reason when status is missing or not meaningful.
+        try:
+            status_norm = (status or "").strip().lower()
+        except Exception:
+            status_norm = ""
+
+        if status_norm not in ("completed", "incomplete"):
+            status_norm = "completed"
+
+        if status_norm == "completed" and finish_reason:
+            try:
+                if provider_norm == "gemini" and isinstance(finish_reason, str):
+                    # Normalize enum-ish string values like "FinishReason.MAX_TOKENS" -> "MAX_TOKENS".
+                    if "." in finish_reason:
+                        finish_reason = finish_reason.split(".")[-1]
+            except Exception:
+                pass
+            if provider_norm == "gemini":
+                status_norm = self._map_gemini_native_status_from_finish_reason(finish_reason)
+            else:
+                status_norm = self._map_completion_status_from_finish_reason(finish_reason)
+
+        status = status_norm
 
         usage_block = getattr(resp, "usage", None)
         usage: LLMAdapter.LLMUsage = {
@@ -366,6 +449,15 @@ class LLMAdapter:
                         else (details_out.get("reasoning_tokens") if isinstance(details_out, dict) else None)
                     )
 
+                    if reasoning_tokens is None:
+                        # OpenAI Responses API may expose reasoning usage under completion_tokens_details.
+                        details_out2 = _uget(usage_block, "completion_tokens_details")
+                        reasoning_tokens = (
+                            getattr(details_out2, "reasoning_tokens", None)
+                            if details_out2 is not None and not isinstance(details_out2, dict)
+                            else (details_out2.get("reasoning_tokens") if isinstance(details_out2, dict) else None)
+                        )
+
                 elif provider_norm == "gemini":
                     prompt_tokens = _uget(usage_block, "prompt_tokens")
                     input_tokens = prompt_tokens if prompt_tokens is not None else _uget(usage_block, "input_tokens")
@@ -392,6 +484,22 @@ class LLMAdapter:
                             reasoning_tokens = None
 
                     completion_tokens = completion_tokens_raw
+
+                    if reasoning_tokens in (None, 0):
+                        # Gemini native SDK exposes a separate thoughts token count.
+                        try:
+                            raw_resp = getattr(resp, "model_response", None) or resp
+                            um2 = getattr(raw_resp, "usage_metadata", None)
+                            if um2 is None:
+                                um2 = getattr(raw_resp, "usageMetadata", None)
+                            if um2 is not None:
+                                rt = getattr(um2, "thoughts_token_count", None)
+                                if rt is None:
+                                    rt = getattr(um2, "thoughtsTokenCount", None)
+                                if rt is not None:
+                                    reasoning_tokens = int(rt or 0)
+                        except Exception:
+                            pass
 
                 else:
                     input_tokens = output_tokens = cached_tokens = reasoning_tokens = total_tokens = None
@@ -539,6 +647,14 @@ class LLMAdapter:
         except Exception:
             pass
 
+        metadata: Optional[Dict[str, Any]] = None
+        try:
+            md = getattr(resp, "metadata", None)
+            if isinstance(md, dict):
+                metadata = md
+        except Exception:
+            metadata = None
+
         result: LLMAdapter.LLMResult = {
             "provider": provider_norm,
             "model": model,
@@ -549,6 +665,7 @@ class LLMAdapter:
             "role": "assistant",
             "status": status,
             "finish_reason": finish_reason,
+            "metadata": metadata,
             "usage": usage,
             "tool_calls": tool_calls,
             "raw": getattr(resp, "model_response", None) or resp,
@@ -641,41 +758,67 @@ class LLMAdapter:
             return None
         return None
 
-    def _get_max_tokens_parameter(self, model: str) -> str:
+
+    def _build_adapter_response_metadata(self, *, provider: str, model_key: str, resolved_model: str) -> Dict[str, Any]:
+        return {
+            "provider": provider,
+            "model": resolved_model,
+            "model_key": model_key,
+        }
+
+    def _extract_openai_response_usage(self, resp: Any) -> Optional[Dict[str, int]]:
         try:
-            mi = self._lookup_model_info_from_registry(model)
-            if mi is not None:
-                return getattr(mi, "max_tokens_parameter", None) or "max_output_tokens"
-        except Exception:
-            pass
-        return "max_output_tokens"
-
-    def _apply_max_tokens_parameter(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        if not isinstance(kwargs, dict) or not kwargs:
-            return kwargs
-
-        param = self._get_max_tokens_parameter(model)
-        out = kwargs.copy()
-
-        if param in out and out.get(param) is not None:
-            if param != "max_output_tokens":
-                out.pop("max_output_tokens", None)
-            out.pop("max_tokens", None)
-            return out
-
-        if "max_output_tokens" in out and out.get("max_output_tokens") is not None:
-            if param == "max_output_tokens":
-                out.pop("max_tokens", None)
+            u = getattr(resp, "usage", None)
+            if u is None:
+                return None
+            it = getattr(u, "input_tokens", None)
+            ot = getattr(u, "output_tokens", None)
+            tt = getattr(u, "total_tokens", None)
+            if it is not None or ot is not None or tt is not None:
+                out: Dict[str, int] = {}
+                if it is not None:
+                    out["input_tokens"] = int(it or 0)
+                if ot is not None:
+                    out["output_tokens"] = int(ot or 0)
+                if tt is not None:
+                    out["total_tokens"] = int(tt or ((it or 0) + (ot or 0)))
                 return out
-            out[param] = out.pop("max_output_tokens")
-            out.pop("max_tokens", None)
-            return out
 
-        if "max_tokens" in out and out.get("max_tokens") is not None:
-            out[param] = out.pop("max_tokens")
-            return out
+            pt = getattr(u, "prompt_tokens", None)
+            ct = getattr(u, "completion_tokens", None)
+            tt2 = getattr(u, "total_tokens", None)
+            if pt is not None or ct is not None or tt2 is not None:
+                return {
+                    "prompt_tokens": int(pt or 0),
+                    "completion_tokens": int(ct or 0),
+                    "total_tokens": int(tt2 or ((pt or 0) + (ct or 0))),
+                }
+        except Exception:
+            return None
+        return None
 
-        return out
+    def _extract_openai_chatcompletion_text(self, resp: Any) -> str:
+        try:
+            choices = getattr(resp, "choices", None)
+            if isinstance(choices, list) and choices:
+                msg = getattr(choices[0], "message", None)
+                content = getattr(msg, "content", None)
+                if isinstance(content, str):
+                    return content
+        except Exception:
+            return ""
+        return ""
+
+    def _extract_openai_chatcompletion_finish_reason(self, resp: Any) -> Optional[str]:
+        try:
+            choices = getattr(resp, "choices", None)
+            if isinstance(choices, list) and choices:
+                fr = getattr(choices[0], "finish_reason", None)
+                if isinstance(fr, str) and fr:
+                    return fr
+        except Exception:
+            return None
+        return None
 
     def _get_model_capabilities(self, model: str) -> Dict[str, Any]:
         try:
@@ -691,7 +834,7 @@ class LLMAdapter:
         if not isinstance(kwargs, dict) or not kwargs:
             return kwargs
 
-        token_params = {"max_output_tokens", "max_tokens", "max_completion_tokens"}
+        token_params = {"max_output_tokens"}
 
         filtered: Dict[str, Any] = {}
         for param, value in kwargs.items():
@@ -854,7 +997,8 @@ class LLMAdapter:
         if not isinstance(effort_map, dict) or not effort_map:
             return clean_kwargs
 
-        max_param_name = getattr(model_info, "max_tokens_parameter", None) or self._get_max_tokens_parameter(model)
+        # Use canonical output token key (adapter will map to provider-specific fields later).
+        max_param_name = "max_output_tokens"
         base_max = clean_kwargs.get(max_param_name)
         if base_max is None:
             return clean_kwargs
@@ -1022,7 +1166,7 @@ class LLMAdapter:
             out.append(t)
         return out
 
-    def _wrap_gemini_chatcompletion_as_responses(self, resp: Any, *, resolved_model: str) -> AdapterResponse:
+    def _wrap_gemini_chatcompletion_as_responses(self, resp: Any, *, model_key: str, resolved_model: str) -> AdapterResponse:
         """Wrap a Gemini (OpenAI-compatible) chat.completions response into a minimal Responses-like shape.
 
         This mirrors the compatibility behavior in the original llm_handler, so callers can rely on:
@@ -1109,13 +1253,20 @@ class LLMAdapter:
             usage_like = None
 
         # Wrap as AdapterResponse (Responses-like shim)
+        finish_reason = self._extract_finish_reason(resp)
         return AdapterResponse(
             output_text=text or "",
             model=resolved_model,
             usage=usage_like,
+            metadata=self._build_adapter_response_metadata(
+                provider="gemini",
+                model_key=model_key,
+                resolved_model=resolved_model,
+            ),
             adapter_response={"output": output_list},
             model_response=resp,
-            finish_reason=self._extract_finish_reason(resp),
+            status=self._map_completion_status_from_finish_reason(finish_reason),
+            finish_reason=finish_reason,
         )
 
     def create(
@@ -1160,7 +1311,29 @@ class LLMAdapter:
         if isinstance(kwargs, dict) and kwargs:
             kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
-        kwargs = self._apply_max_tokens_parameter(model, kwargs)
+        # Canonicalize output token budget across providers/endpoints.
+        # Public canonical key: max_output_tokens
+        mot = None
+        if isinstance(kwargs, dict):
+            mot = kwargs.pop("max_output_tokens", None) # max-output-tokens passed to the adapter
+
+        # Clamp to per-model limit if provided in registry (limits may be missing).
+        try:
+            mi = self._lookup_model_info_from_registry(model) if model else None
+            limit = (getattr(mi, "limits", None) or {}).get("max_output_tokens") if mi is not None else None
+            if mot is not None and limit is not None:
+                try:
+                    mot_i = int(mot)
+                    limit_i = int(limit)
+                    if mot_i > 0 and limit_i > 0:
+                        mot = min(mot_i, limit_i)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        if mot is not None and isinstance(kwargs, dict):
+            kwargs["max_output_tokens"] = mot
 
         if provider == "openai":
             kwargs.pop("__model_spec", None)
@@ -1245,6 +1418,10 @@ class LLMAdapter:
             reasoning_value = mapped_kwargs.pop("reasoning_effort")
             mapped_kwargs.setdefault("reasoning", {"effort": reasoning_value})
 
+        # Canonical output token budget (set by create()); map to endpoint-specific param name later.
+        mot = None
+        mot = mapped_kwargs.pop("max_output_tokens", None)
+
         endpoint = "responses"
         try:
             model_info = self._lookup_model_info_from_registry(model)
@@ -1255,8 +1432,64 @@ class LLMAdapter:
         except Exception:
             endpoint = "chat_completions"
 
+        # Map canonical max_output_tokens to the OpenAI field name for this endpoint.
+        if mot is not None:
+            try:
+                mot_i = int(mot)
+            except Exception:
+                mot_i = mot
+            if endpoint == "responses":
+                mapped_kwargs["max_output_tokens"] = mot_i
+            elif endpoint == "chat_completions":
+                mapped_kwargs["max_completion_tokens"] = mot_i
+
         if endpoint == "responses":
-            return client.responses.create(model=resolved_model, input=input, stream=stream, **mapped_kwargs)
+            if stream:
+                return client.responses.create(model=resolved_model, input=input, stream=True, **mapped_kwargs)
+
+            resp = client.responses.create(model=resolved_model, input=input, stream=False, **mapped_kwargs)
+            text = getattr(resp, "output_text", None)
+            if not isinstance(text, str):
+                text = ""
+
+            status: Optional[str] = None
+            finish_reason: Optional[str] = None
+            try:
+                st = getattr(resp, "status", None)
+                if isinstance(st, str) and st:
+                    status = st
+            except Exception:
+                status = None
+            try:
+                incomplete = getattr(resp, "incomplete_details", None)
+                if incomplete is not None:
+                    r = getattr(incomplete, "reason", None)
+                    if r is not None:
+                        finish_reason = str(r)
+            except Exception:
+                finish_reason = None
+
+            if status:
+                status_norm = status.strip().lower()
+                if status_norm == "incomplete":
+                    status = "incomplete"
+                elif status_norm == "completed":
+                    status = "completed"
+
+            return AdapterResponse(
+                output_text=text,
+                model=resolved_model,
+                usage=self._extract_openai_response_usage(resp),
+                metadata=self._build_adapter_response_metadata(
+                    provider="openai",
+                    model_key=model,
+                    resolved_model=resolved_model,
+                ),
+                adapter_response=resp,
+                model_response=resp,
+                status=status or ("incomplete" if finish_reason else "completed"),
+                finish_reason=finish_reason,
+            )
 
         if endpoint == "chat_completions":
             if "tools" in mapped_kwargs:
@@ -1268,11 +1501,26 @@ class LLMAdapter:
 
             messages = input if isinstance(input, list) else [{"role": "user", "content": str(input)}]
             if not stream:
-                return client.chat.completions.create(
+                resp = client.chat.completions.create(
                     model=resolved_model,
                     messages=messages,
                     stream=False,
                     **mapped_kwargs,
+                )
+                finish_reason = self._extract_openai_chatcompletion_finish_reason(resp)
+                return AdapterResponse(
+                    output_text=self._extract_openai_chatcompletion_text(resp),
+                    model=resolved_model,
+                    usage=self._extract_openai_response_usage(resp),
+                    metadata=self._build_adapter_response_metadata(
+                        provider="openai",
+                        model_key=model,
+                        resolved_model=resolved_model,
+                    ),
+                    adapter_response=resp,
+                    model_response=resp,
+                    status=self._map_completion_status_from_finish_reason(finish_reason),
+                    finish_reason=finish_reason,
                 )
 
             def event_gen() -> Iterator[AdapterEvent]:
@@ -1355,6 +1603,10 @@ class LLMAdapter:
     def _gemini_call(self, *, model: str, input: Any, stream: bool, skip_reasoning: bool = False, **kwargs: Any):
         resolved_model = self._resolve_model_name(model)
         working_kwargs = self._prepare_gemini_adapter_kwargs(model, kwargs)
+
+        # Extract canonical output token budget (create() writes max_output_tokens).
+        mot = None
+        mot = working_kwargs.pop("max_output_tokens", None)
 
         endpoint = "chat_completions"
         try:
@@ -1443,11 +1695,11 @@ class LLMAdapter:
                     return _extract_native_text(resp)
 
             # Build contents + config for google-genai.
-            sdk_kwargs: Dict[str, Any] = dict(kwargs or {}) if isinstance(kwargs, dict) else {}
+            # Start from already-prepared kwargs so canonical token handling and thinking config stay consistent.
+            sdk_kwargs: Dict[str, Any] = dict(working_kwargs or {}) if isinstance(working_kwargs, dict) else {}
             try:
                 sdk_kwargs = self._filter_kwargs_by_capabilities(model, sdk_kwargs)
                 sdk_kwargs = self._map_reasoning_parameter_with_default(model, sdk_kwargs)
-                sdk_kwargs = self._apply_gemini_thinking_tax(model, sdk_kwargs)
             except Exception:
                 pass
 
@@ -1457,12 +1709,7 @@ class LLMAdapter:
             if sdk_kwargs.get("top_p") is not None:
                 cfg["top_p"] = sdk_kwargs.get("top_p")
 
-            # Token limit mapping: allow any of the known names and map to max_output_tokens.
-            mot = sdk_kwargs.get("max_output_tokens")
-            if mot is None:
-                mot = sdk_kwargs.get("max_tokens")
-            if mot is None:
-                mot = sdk_kwargs.get("max_completion_tokens")
+            # Token limit mapping: canonical max_output_tokens.
             if mot is not None:
                 cfg["max_output_tokens"] = mot
 
@@ -1643,13 +1890,32 @@ class LLMAdapter:
                     finish_reason=None,
                 )
 
+                finish_reason: Optional[str] = None
+                try:
+                    candidates = getattr(resp, "candidates", None)
+                    if isinstance(candidates, list) and candidates:
+                        cand0 = candidates[0]
+                        fr = getattr(cand0, "finish_reason", None)
+                        if fr is None:
+                            fr = getattr(cand0, "finishReason", None)
+                        if fr is not None:
+                            finish_reason = str(fr)
+                except Exception:
+                    finish_reason = None
+
                 return AdapterResponse(
                     output_text=text,
                     model=resolved_model,
                     usage=usage_like,
+                    metadata=self._build_adapter_response_metadata(
+                        provider="gemini",
+                        model_key=model,
+                        resolved_model=resolved_model,
+                    ),
                     adapter_response=wrapper,
                     model_response=resp,
-                    finish_reason=None,
+                    status=self._map_gemini_native_status_from_finish_reason(finish_reason),
+                    finish_reason=finish_reason,
                 )
 
             def event_gen() -> Iterator[AdapterEvent]:
@@ -1685,13 +1951,17 @@ class LLMAdapter:
             except Exception:
                 pass
 
+        if mot is not None:
+            # Gemini OpenAI-compatible chat.completions uses max_completion_tokens.
+            working_kwargs["max_completion_tokens"] = mot
+
         messages = input if isinstance(input, list) else [{"role": "user", "content": str(input)}]
         resp = client.chat.completions.create(model=resolved_model, messages=messages, stream=stream, **working_kwargs)
 
         # For non-streaming calls, wrap Gemini chat.completions into a minimal Responses-like shim
         # so callers can consistently access output_text/output/usage across providers.
         if not stream:
-            return self._wrap_gemini_chatcompletion_as_responses(resp, resolved_model=resolved_model)
+            return self._wrap_gemini_chatcompletion_as_responses(resp, model_key=model, resolved_model=resolved_model)
 
         return resp
 
