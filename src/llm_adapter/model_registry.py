@@ -23,7 +23,9 @@ class ModelInfo:
     endpoint: Endpoint
     pricing: Optional[Pricing]
     capabilities: Dict[str, Any] = field(default_factory=dict)
+    param_policy: Dict[str, Any] = field(default_factory=dict)
     limits: Dict[str, Any] = field(default_factory=dict)
+    reasoning_policy: Dict[str, Any] = field(default_factory=dict)
     thinking_tax: Dict[str, Any] = field(default_factory=dict)
     reasoning_parameter: Optional[Tuple[str, Any]] = None
 
@@ -58,16 +60,12 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="responses",
         pricing=Pricing(input_per_mm=0.15, output_per_mm=0.60, cached_input_per_mm=0.075),
         limits={
-            "max_output_tokens": 800
+            "max_output_tokens": 2000
         },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
-            "tools": True,
-            "stream": True,
-            "temperature": True,
-            "reasoning_effort": False,
-            "top_p": True,
         },
+        param_policy={"disabled": {"reasoning_effort", "stream"}},
     ),
     "openai:gpt-4o": ModelInfo(
         key="openai:gpt-4o",
@@ -76,16 +74,12 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="responses",
         pricing=Pricing(input_per_mm=2.50, output_per_mm=10.00, cached_input_per_mm=1.25),
         limits={
-            "max_output_tokens": 800
+            "max_output_tokens":  2000
         },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
-            "tools": True,
-            "stream": True,
-            "temperature": True,
-            "reasoning_effort": False,
-            "top_p": True,
         },
+        param_policy={"disabled": {"reasoning_effort", "stream"}},
     ),
     "openai:chat_gpt-4o-mini": ModelInfo(
         key="openai:chat_gpt-4o-mini",
@@ -94,16 +88,12 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=0.15, output_per_mm=0.60, cached_input_per_mm=0.075),
         limits={
-            "max_output_tokens": 800
+            "max_output_tokens": 2000
         },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
-            "tools": True,
-            "stream": True,
-            "temperature": True,
-            "reasoning_effort": False,
-            "top_p": True,
         },
+        param_policy={"disabled": {"reasoning_effort", "stream"}},
     ),
     "openai:chat_gpt-4o": ModelInfo(
         key="openai:chat_gpt-4o",
@@ -112,16 +102,12 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=2.50, output_per_mm=10.00, cached_input_per_mm=1.25),
         limits={
-            "max_output_tokens": 800
+            "max_output_tokens": 2000
         },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
-            "tools": True,
-            "stream": True,
-            "temperature": True,
-            "reasoning_effort": False,
-            "top_p": True,
         },
+        param_policy={"disabled": {"reasoning_effort", "stream"}},
     ),
     "openai:reasoning_gpt-4o-mini": ModelInfo(
         key="openai:reasoning_gpt-4o-mini",
@@ -130,15 +116,16 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="responses",
         pricing=Pricing(input_per_mm=1.10, output_per_mm=4.40),
         limits={
-            "max_output_tokens": 800
+            "max_output_tokens": 2000
         },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
-            "tools": True,
-            "stream": False,
-            "temperature": False,
             "reasoning_effort": True,
-            "top_p": False,
+        },
+        param_policy={"disabled": {"stream", "temperature", "top_p"}},
+        reasoning_policy={
+            "mode": "openai_effort",
+            "default": "low",
         },
         reasoning_parameter=("reasoning_effort", "low"),
     ),
@@ -149,15 +136,16 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="responses",
         pricing=Pricing(input_per_mm=0.25, output_per_mm=2.00),
         limits={
-            "max_output_tokens": 800
+            "max_output_tokens": 2000
         },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
-            "tools": True,
-            "stream": False,
-            "temperature": False,
             "reasoning_effort": True,
-            "top_p": False,
+        },
+        param_policy={"disabled": {"stream", "temperature", "top_p"}},
+        reasoning_policy={
+            "mode": "openai_effort",
+            "default": "minimal",
         },
         reasoning_parameter=("reasoning_effort", "minimal"),
     ),
@@ -181,16 +169,12 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=0.20, output_per_mm=0.80),
         limits={
-            "max_output_tokens": 800
+            "max_output_tokens": 2000
         },
         capabilities={
             "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
-            "tools": True,
-            "stream": True,
-            "temperature": True,
-            "reasoning_effort": False,
-            "top_p": True,
         },
+        param_policy={"disabled": {"reasoning_effort"}},
         thinking_tax={
             "effort_map": {
                 "none": {"reserve_ratio": 0.0},
@@ -208,15 +192,32 @@ REGISTRY: Dict[str, ModelInfo] = {
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=0.50, output_per_mm=3.00),
         limits={
-            "max_output_tokens": 800
+            "max_output_tokens": 2000
         },
         capabilities={
             "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
-            "tools": True,
-            "stream": True,
-            "temperature": True,
             "reasoning_effort": True,
-            "top_p": True,
+        },
+        param_policy={},
+        reasoning_policy={
+            "mode": "gemini_level",
+            "param": "thinking_level",
+            "default": "minimal",
+            "map": {
+                "none": "minimal",
+                "minimal": "minimal",
+                "low": "low",
+                "medium": "medium",
+                "high": "high",
+            },
+            "reserve_ratio": {
+                "none": 0.0,
+                "minimal": 0.25,
+                "low": 0.30,
+                "medium": 0.50,
+                "high": 0.80,
+            },
+            "counts_against_output": True,
         },
         reasoning_parameter=("thinking_level", "minimal"),
         thinking_tax={
@@ -245,14 +246,31 @@ REGISTRY: Dict[str, ModelInfo] = {
         pricing=Pricing(input_per_mm=0.50, output_per_mm=3.00),
         capabilities={
             "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
-            "tools": True,
-            "stream": True,
-            "temperature": True,
             "reasoning_effort": True,
-            "top_p": True,
         },
         limits={
-            "max_output_tokens": 800
+            "max_output_tokens": 2000
+        },
+        param_policy={},
+        reasoning_policy={
+            "mode": "gemini_level",
+            "param": "thinking_level",
+            "default": "low",
+            "map": {
+                "none": "minimal",
+                "minimal": "minimal",
+                "low": "low",
+                "medium": "medium",
+                "high": "high",
+            },
+            "reserve_ratio": {
+                "none": 0.0,
+                "minimal": 0.25,
+                "low": 0.30,
+                "medium": 0.50,
+                "high": 0.80,
+            },
+            "counts_against_output": True,
         },
         reasoning_parameter=("thinking_level", "low"),
         thinking_tax={
@@ -281,14 +299,27 @@ REGISTRY: Dict[str, ModelInfo] = {
         pricing=Pricing(input_per_mm=0.30, output_per_mm=2.50),
         capabilities={
             "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
-            "tools": True,
-            "stream": True,
+            "allow_tools": True,
             "temperature": True,
             "reasoning_effort": True,
             "top_p": True,
         },
         limits={
-            "max_output_tokens": 800
+            "max_output_tokens": 2000
+        },
+        param_policy={},
+        reasoning_policy={
+            "mode": "gemini_budget",
+            "param": "thinking_budget",
+            "default": "low",
+            "budget_map": {
+                "none": 0,
+                "minimal": 500,
+                "low": 1000,
+                "medium": 2000,
+                "high": 5000,
+            },
+            "counts_against_output": True,
         },
         reasoning_parameter=("thinking_budget", 1000),
         thinking_tax={
@@ -309,14 +340,24 @@ REGISTRY: Dict[str, ModelInfo] = {
         pricing=Pricing(input_per_mm=0.30, output_per_mm=2.50),
         capabilities={
             "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
-            "tools": True,
-            "stream": True,
-            "temperature": True,
             "reasoning_effort": True,
-            "top_p": True,
         },
         limits={
-            "max_output_tokens": 800
+            "max_output_tokens": 2000
+        },
+        param_policy={},
+        reasoning_policy={
+            "mode": "gemini_budget",
+            "param": "thinking_budget",
+            "default": "low",
+            "budget_map": {
+                "none": 0,
+                "minimal": 500,
+                "low": 1000,
+                "medium": 2000,
+                "high": 5000,
+            },
+            "counts_against_output": True,
         },
         reasoning_parameter=("thinking_budget", 1000),
         thinking_tax={

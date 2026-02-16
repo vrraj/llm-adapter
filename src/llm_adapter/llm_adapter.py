@@ -72,26 +72,7 @@ class AdapterResponse:
         self.metadata = metadata or {}
 
         self.adapter_response = adapter_response
-        try:
-            output_val = None
-            if adapter_response is not None:
-                if isinstance(adapter_response, dict):
-                    output_val = adapter_response.get("output")
-                else:
-                    output_val = getattr(adapter_response, "output", None)
-            self.output = output_val
-        except Exception:
-            self.output = None
-
-        try:
-            if model_response is not None:
-                self.model_response = model_response
-            elif adapter_response is not None and hasattr(adapter_response, "model_response"):
-                self.model_response = getattr(adapter_response, "model_response")
-            else:
-                self.model_response = model_response or adapter_response
-        except Exception:
-            self.model_response = None
+        self.model_response = model_response
 
         self.status = status
         self.finish_reason = finish_reason
@@ -443,20 +424,24 @@ class LLMAdapter:
                     )
 
                     details_out = _uget(usage_block, "output_tokens_details")
-                    reasoning_tokens = (
-                        getattr(details_out, "reasoning_tokens", None)
-                        if details_out is not None and not isinstance(details_out, dict)
-                        else (details_out.get("reasoning_tokens") if isinstance(details_out, dict) else None)
-                    )
+                    reasoning_tokens = None
+                    print(f"[DEBUG build_llm_result_from_response] details_out: {details_out}")
+                    if details_out is not None:
+                        if isinstance(details_out, dict):
+                            reasoning_tokens = details_out.get("reasoning_tokens")
+                        else:
+                            reasoning_tokens = getattr(details_out, "reasoning_tokens", None)
+                        print(f"[DEBUG build_llm_result_from_response] extracted reasoning_tokens: {reasoning_tokens}")
 
                     if reasoning_tokens is None:
                         # OpenAI Responses API may expose reasoning usage under completion_tokens_details.
                         details_out2 = _uget(usage_block, "completion_tokens_details")
-                        reasoning_tokens = (
-                            getattr(details_out2, "reasoning_tokens", None)
-                            if details_out2 is not None and not isinstance(details_out2, dict)
-                            else (details_out2.get("reasoning_tokens") if isinstance(details_out2, dict) else None)
-                        )
+                        if details_out2 is not None:
+                            if isinstance(details_out2, dict):
+                                reasoning_tokens = details_out2.get("reasoning_tokens")
+                            else:
+                                reasoning_tokens = getattr(details_out2, "reasoning_tokens", None)
+                            print(f"[DEBUG build_llm_result_from_response] extracted reasoning_tokens from completion_tokens_details: {reasoning_tokens}")
 
                 elif provider_norm == "gemini":
                     prompt_tokens = _uget(usage_block, "prompt_tokens")
@@ -759,12 +744,22 @@ class LLMAdapter:
         return None
 
 
-    def _build_adapter_response_metadata(self, *, provider: str, model_key: str, resolved_model: str) -> Dict[str, Any]:
-        return {
+    def _build_adapter_response_metadata(
+        self,
+        *,
+        provider: str,
+        model_key: str,
+        resolved_model: str,
+        dropped_kwargs: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        out: Dict[str, Any] = {
             "provider": provider,
             "model": resolved_model,
             "model_key": model_key,
         }
+        if isinstance(dropped_kwargs, dict) and dropped_kwargs:
+            out["adapter"] = {"dropped_kwargs": dict(dropped_kwargs)}
+        return out
 
     def _extract_openai_response_usage(self, resp: Any) -> Optional[Dict[str, int]]:
         try:
@@ -774,6 +769,14 @@ class LLMAdapter:
             it = getattr(u, "input_tokens", None)
             ot = getattr(u, "output_tokens", None)
             tt = getattr(u, "total_tokens", None)
+            reasoning = None
+
+            # Extract reasoning_tokens from output_tokens_details if present
+            out_details = getattr(u, "output_tokens_details", None)
+    
+            if out_details is not None:
+                reasoning = getattr(out_details, "reasoning_tokens", None)
+                print(f"[DEBUG _extract_openai_response_usage] reasoning: {reasoning}")
             if it is not None or ot is not None or tt is not None:
                 out: Dict[str, int] = {}
                 if it is not None:
@@ -782,17 +785,23 @@ class LLMAdapter:
                     out["output_tokens"] = int(ot or 0)
                 if tt is not None:
                     out["total_tokens"] = int(tt or ((it or 0) + (ot or 0)))
+                if reasoning is not None:
+                    out["reasoning_tokens"] = int(reasoning or 0)
+                print(f"[DEBUG _extract_openai_response_usage] final out dict: {out}")
                 return out
 
             pt = getattr(u, "prompt_tokens", None)
             ct = getattr(u, "completion_tokens", None)
             tt2 = getattr(u, "total_tokens", None)
             if pt is not None or ct is not None or tt2 is not None:
-                return {
+                out2 = {
                     "prompt_tokens": int(pt or 0),
                     "completion_tokens": int(ct or 0),
                     "total_tokens": int(tt2 or ((pt or 0) + (ct or 0))),
                 }
+                if reasoning is not None:
+                    out2["reasoning_tokens"] = int(reasoning or 0)
+                return out2
         except Exception:
             return None
         return None
@@ -829,10 +838,179 @@ class LLMAdapter:
             pass
         return {}
 
+    def _get_model_param_policy(self, model: str) -> Dict[str, Any]:
+        try:
+            mi = self._lookup_model_info_from_registry(model)
+            if mi is not None:
+                pp = getattr(mi, "param_policy", None)
+                if isinstance(pp, dict):
+                    return pp
+        except Exception:
+            pass
+        return {}
+
+    def _get_model_reasoning_policy(self, model: str) -> Dict[str, Any]:
+        try:
+            mi = self._lookup_model_info_from_registry(model)
+            if mi is not None:
+                rp = getattr(mi, "reasoning_policy", None)
+                if isinstance(rp, dict):
+                    return rp
+        except Exception:
+            pass
+        return {}
+
+    def _apply_openai_reasoning_policy(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(kwargs, dict):
+            return kwargs
+        policy = self._get_model_reasoning_policy(model)
+        if not isinstance(policy, dict) or not policy:
+            return kwargs
+        if str(policy.get("mode") or "").strip().lower() != "openai_effort":
+            return kwargs
+
+        out = dict(kwargs)
+
+        # Respect an explicit provider-native `reasoning` block if caller already passed it.
+        if isinstance(out.get("reasoning"), dict) and out.get("reasoning"):
+            return out
+
+        effort = out.pop("reasoning_effort", None)
+        if effort is None:
+            effort = policy.get("default")
+        effort_name = self._normalize_effort_name(effort)
+
+        # Treat "none" as no reasoning block.
+        if effort_name == "none":
+            return out
+
+        out["reasoning"] = {"effort": effort_name}
+        return out
+
+    def _apply_gemini_reasoning_policy(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(kwargs, dict):
+            return kwargs
+
+        model_info = self._lookup_model_info_from_registry(model)
+        if model_info is None or getattr(model_info, "provider", None) != "gemini":
+            return kwargs
+
+        policy = self._get_model_reasoning_policy(model)
+        if not isinstance(policy, dict) or not policy:
+            return kwargs
+
+        mode = str(policy.get("mode") or "").strip().lower()
+        if mode not in ("gemini_level", "gemini_budget"):
+            return kwargs
+
+        out = dict(kwargs)
+
+        # Determine canonical requested effort (public knob).
+        effort = out.pop("reasoning_effort", None)
+        if effort is None:
+            effort = policy.get("default")
+        effort_name = self._normalize_effort_name(effort)
+
+        # Canonical output token key used by adapter.
+        max_param = "max_output_tokens"
+        base_max = out.get(max_param)
+        base_max_i = None
+        try:
+            if base_max is not None:
+                base_max_i = int(base_max)
+        except Exception:
+            base_max_i = None
+
+        if mode == "gemini_level":
+            # Map effort -> thinking_level
+            p_name = str(policy.get("param") or "thinking_level")
+            mapping = policy.get("map") if isinstance(policy.get("map"), dict) else {}
+            mapped_level = mapping.get(effort_name, mapping.get("medium", effort_name))
+            out[p_name] = str(mapped_level)
+
+            # Inflate max_output_tokens to reserve room for thoughts (Gemini nuance)
+            reserve = policy.get("reserve_ratio") if isinstance(policy.get("reserve_ratio"), dict) else {}
+            ratio = reserve.get(effort_name)
+            if ratio is None:
+                ratio = reserve.get("medium", 0.0)
+            try:
+                ratio_f = float(ratio)
+            except Exception:
+                ratio_f = 0.0
+
+            if base_max_i is not None and base_max_i > 0 and ratio_f > 0.0:
+                inflated = int(round(base_max_i * (1.0 + ratio_f)))
+                if inflated > base_max_i:
+                    out[max_param] = inflated
+
+            return out
+
+        # mode == gemini_budget
+        p_name = str(policy.get("param") or "thinking_budget")
+        budget_map = policy.get("budget_map") if isinstance(policy.get("budget_map"), dict) else {}
+        budget = budget_map.get(effort_name)
+        if budget is None:
+            budget = budget_map.get("medium", budget_map.get("low", None))
+
+        try:
+            budget_i = int(budget) if budget is not None else None
+        except Exception:
+            budget_i = None
+
+        if budget_i is None:
+            return out
+
+        # Clamp budget so it cannot consume the entire output cap.
+        if base_max_i is not None and base_max_i > 0:
+            # Keep at least 100 tokens for visible answer.
+            cap = max(base_max_i - 100, 0)
+            budget_i = min(budget_i, cap)
+
+        out[p_name] = int(budget_i)
+        return out
+
     def _filter_kwargs_by_capabilities(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         capabilities = self._get_model_capabilities(model)
         if not isinstance(kwargs, dict) or not kwargs:
             return kwargs
+        kwargs = dict(kwargs)   # <-- shallow copy so all pop() calls below don't affect caller kwargs dict
+
+        policy = self._get_model_param_policy(model)
+
+        # Rename parameters (public input -> model/provider-specific param name)
+        try:
+            rename_map = policy.get("rename") if isinstance(policy, dict) else None
+            if isinstance(rename_map, dict) and rename_map:
+                for src, dst in rename_map.items():
+                    try:
+                        src_s = str(src)
+                        dst_s = str(dst)
+                    except Exception:
+                        continue
+                    if not src_s or not dst_s:
+                        continue
+                    if src_s in kwargs:
+                        val = kwargs.pop(src_s)
+                        if dst_s not in kwargs:
+                            kwargs[dst_s] = val
+        except Exception:
+            pass
+
+        # Remove disabled parameters (from registry) before sending to provider
+        try:
+            disabled = policy.get("disabled") if isinstance(policy, dict) else None
+            if isinstance(disabled, (set, list, tuple)):
+                for p in disabled:
+                    try:
+                        p_s = str(p)
+                    except Exception:
+                        continue
+                    if not p_s:
+                        continue
+                    if p_s in kwargs:
+                        kwargs.pop(p_s, None)
+        except Exception:
+            pass
 
         token_params = {"max_output_tokens"}
 
@@ -973,62 +1151,8 @@ class LLMAdapter:
         return None
 
     def _apply_gemini_thinking_tax(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        if not isinstance(kwargs, dict) or not kwargs:
-            return kwargs
-
-        spec = kwargs.get("__model_spec")
-        clean_kwargs = kwargs.copy()
-        clean_kwargs.pop("__model_spec", None)
-
-        model_info = self._lookup_model_info_from_registry(model)
-        if model_info is None:
-            return clean_kwargs
-        if getattr(model_info, "provider", None) != "gemini":
-            return clean_kwargs
-
-        try:
-            caps = getattr(model_info, "capabilities", {}) or {}
-            if not bool(caps.get("reasoning_effort", False)):
-                return clean_kwargs
-        except Exception:
-            return clean_kwargs
-
-        effort_map = self._extract_effort_map(model_info, spec)
-        if not isinstance(effort_map, dict) or not effort_map:
-            return clean_kwargs
-
-        # Use canonical output token key (adapter will map to provider-specific fields later).
-        max_param_name = "max_output_tokens"
-        base_max = clean_kwargs.get(max_param_name)
-        if base_max is None:
-            return clean_kwargs
-        try:
-            base_max_i = int(base_max)
-        except Exception:
-            return clean_kwargs
-        if base_max_i <= 0:
-            return clean_kwargs
-
-        requested_effort = self._get_requested_effort_from_kwargs(model_info, clean_kwargs)
-        effort_name = self._normalize_effort_name(requested_effort)
-
-        ratio = effort_map.get(effort_name)
-        if ratio is None:
-            ratio = effort_map.get("medium", 0.0)
-        try:
-            ratio_f = float(ratio)
-        except Exception:
-            ratio_f = 0.0
-
-        if ratio_f <= 0.0:
-            return clean_kwargs
-
-        inflated_max = int(round(base_max_i * (1.0 + ratio_f)))
-        if inflated_max <= base_max_i:
-            return clean_kwargs
-
-        clean_kwargs[max_param_name] = inflated_max
-        return clean_kwargs
+        # Deprecated: reasoning behavior is now implemented via `reasoning_policy`.
+        return kwargs
 
     def _inject_gemini_thinking_config(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(kwargs, dict) or not kwargs:
@@ -1038,37 +1162,12 @@ class LLMAdapter:
         if model_info is None or getattr(model_info, "provider", None) != "gemini":
             return kwargs
 
-        try:
-            caps = getattr(model_info, "capabilities", {}) or {}
-            if not bool(caps.get("reasoning_effort", False)):
-                return kwargs
-        except Exception:
+        policy = self._get_model_reasoning_policy(model)
+        if not isinstance(policy, dict) or not policy:
             return kwargs
 
-        thinking_tax = getattr(model_info, "thinking_tax", None)
-        if not isinstance(thinking_tax, dict) or not thinking_tax:
-            return kwargs
-
-        kind = thinking_tax.get("kind")
-        if kind not in ("budget", "level"):
-            return kwargs
-
-        rp = getattr(model_info, "reasoning_parameter", None)
-        rp_name = None
-        rp_default = None
-        if isinstance(rp, (tuple, list)) and len(rp) >= 1:
-            rp_name = rp[0]
-            rp_default = rp[1] if len(rp) > 1 else None
-        else:
-            return kwargs
-
-        if not rp_name:
-            return kwargs
-
-        requested_value = kwargs.get(rp_name)
-        if requested_value is None:
-            requested_value = rp_default
-        if requested_value is None:
+        mode = str(policy.get("mode") or "").strip().lower()
+        if mode not in ("gemini_level", "gemini_budget"):
             return kwargs
 
         out = dict(kwargs)
@@ -1078,46 +1177,42 @@ class LLMAdapter:
             inner = existing.get("extra_body", existing)
 
         inner.setdefault("google", {})
+        tc = inner["google"].get("thinking_config")
+        if not isinstance(tc, dict):
+            tc = {}
 
-        if kind == "budget":
-            try:
-                budget = int(requested_value)
-            except Exception:
-                budget = None
-            if budget is None or budget == -1:
-                return out
-            tc = inner["google"].get("thinking_config")
-            if not isinstance(tc, dict):
-                tc = {}
-            tc["thinking_budget"] = budget
+        # `include_thoughts` may be set by `_prepare_gemini_adapter_kwargs`.
+        if out.get("include_thoughts") is not None:
+            tc["include_thoughts"] = bool(out.get("include_thoughts"))
+            out.pop("include_thoughts", None)
+
+        if mode == "gemini_level":
+            # Prefer explicit thinking_level if present.
+            if out.get("thinking_level") is not None:
+                tc["thinking_level"] = str(out.get("thinking_level"))
+                out.pop("thinking_level", None)
+
+        if mode == "gemini_budget":
+            if out.get("thinking_budget") is not None:
+                try:
+                    tc["thinking_budget"] = int(out.get("thinking_budget"))
+                except Exception:
+                    tc["thinking_budget"] = out.get("thinking_budget")
+                out.pop("thinking_budget", None)
+
+        if tc:
             inner["google"]["thinking_config"] = tc
-
-        elif kind == "level":
-            level = requested_value
-            param_map = thinking_tax.get("param_map", {})
-            if isinstance(param_map, dict):
-                key = str(requested_value).strip().lower()
-                level = param_map.get(key, requested_value)
-                tc = inner["google"].get("thinking_config")
-                if not isinstance(tc, dict):
-                    tc = {}
-                if rp[0].lower() == "thinking_budget":
-                    tc["thinking_budget"] = str(level)  # Use thinking_budget for budget models
-                else:
-                    tc["thinking_level"] = str(level)  # Use thinking_level for level models
-                inner["google"]["thinking_config"] = tc
-
-        out["extra_body"] = {"extra_body": inner}
-
-        if rp_name in out:
-            out.pop(rp_name)
+            out["extra_body"] = {"extra_body": inner}
+        else:
+            # Preserve existing extra_body shape if nothing added.
+            if existing:
+                out["extra_body"] = existing
 
         return out
 
     def _prepare_gemini_adapter_kwargs(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         filtered_kwargs = self._filter_kwargs_by_capabilities(model, kwargs)
-        mapped_kwargs = self._map_reasoning_parameter_with_default(model, filtered_kwargs)
-        prepared_kwargs = self._apply_gemini_thinking_tax(model, mapped_kwargs)
+        prepared_kwargs = self._apply_gemini_reasoning_policy(model, filtered_kwargs)
         prepared_kwargs = self._inject_gemini_thinking_config(model, prepared_kwargs)
 
         # Best-effort: include thoughts when user requested reasoning effort (your UI requirement)
@@ -1413,10 +1508,7 @@ class LLMAdapter:
         client = self._get_openai()
         resolved_model = self._resolve_model_name(model)
         filtered_kwargs = self._filter_kwargs_by_capabilities(model, kwargs)
-        mapped_kwargs = self._map_reasoning_parameter_with_default(model, filtered_kwargs)
-        if "reasoning_effort" in mapped_kwargs:
-            reasoning_value = mapped_kwargs.pop("reasoning_effort")
-            mapped_kwargs.setdefault("reasoning", {"effort": reasoning_value})
+        mapped_kwargs = self._apply_openai_reasoning_policy(model, filtered_kwargs)
 
         # Canonical output token budget (set by create()); map to endpoint-specific param name later.
         mot = None
@@ -1476,10 +1568,12 @@ class LLMAdapter:
                 elif status_norm == "completed":
                     status = "completed"
 
+            usage_dict = self._extract_openai_response_usage(resp)
+            print(f"[DEBUG _openai_call Responses] usage dict for AdapterResponse: {usage_dict}")
             return AdapterResponse(
                 output_text=text,
                 model=resolved_model,
-                usage=self._extract_openai_response_usage(resp),
+                usage=usage_dict,
                 metadata=self._build_adapter_response_metadata(
                     provider="openai",
                     model_key=model,
@@ -1699,7 +1793,7 @@ class LLMAdapter:
             sdk_kwargs: Dict[str, Any] = dict(working_kwargs or {}) if isinstance(working_kwargs, dict) else {}
             try:
                 sdk_kwargs = self._filter_kwargs_by_capabilities(model, sdk_kwargs)
-                sdk_kwargs = self._map_reasoning_parameter_with_default(model, sdk_kwargs)
+                sdk_kwargs = self._apply_gemini_reasoning_policy(model, sdk_kwargs)
             except Exception:
                 pass
 
@@ -1715,25 +1809,60 @@ class LLMAdapter:
 
             contents: Any = input
             if isinstance(input, list):
-                system_messages = [m for m in input if m.get("role") == "system"]
-                user_messages = [m for m in input if m.get("role") == "user"]
-                if system_messages:
-                    cfg["system_instruction"] = "\n".join([m.get("content", "") for m in system_messages])
+                # Validate and preserve multi-turn structure.
+                system_texts: list[str] = []
+                non_system: list[Dict[str, Any]] = []
+                for m in input:
+                    if not isinstance(m, dict):
+                        raise LLMError(
+                            provider="gemini",
+                            model=model,
+                            kind="input",
+                            code="invalid_message",
+                            message="Gemini SDK expects message items to be dicts with role/content",
+                        )
+                    role = (m.get("role") or "").strip().lower()
+                    if role not in ("system", "user", "assistant"):
+                        raise LLMError(
+                            provider="gemini",
+                            model=model,
+                            kind="input",
+                            code="invalid_role",
+                            message=f"Invalid role '{role}'. Allowed roles: system, user, assistant",
+                        )
+                    if role == "system":
+                        system_texts.append(str(m.get("content", "") or ""))
+                    else:
+                        non_system.append(m)
+
+                if system_texts:
+                    cfg["system_instruction"] = "\n".join([t for t in system_texts if t])
+
+                # Build google-genai Contents in order.
                 try:
                     from google.genai import types as _types  # type: ignore
 
-                    parts: list[Any] = []
-                    for m in user_messages:
-                        parts.append(_types.Part.from_text(text=str(m.get("content", ""))))
-                    if parts:
-                        contents = [_types.Content(role="user", parts=parts)]
-                    else:
-                        contents = ""
+                    contents_list: list[Any] = []
+                    for m in non_system:
+                        role = (m.get("role") or "").strip().lower()
+                        mapped_role = "user" if role == "user" else "model"  # assistant -> model
+                        text = str(m.get("content", "") or "")
+                        if not text:
+                            continue
+                        part = _types.Part.from_text(text=text)
+                        contents_list.append(_types.Content(role=mapped_role, parts=[part]))
+
+                    contents = contents_list if contents_list else ""
                 except Exception:
-                    if user_messages:
-                        contents = "\n".join([m.get("content", "") for m in user_messages])
-                    else:
-                        contents = ""
+                    # Fallback: collapse transcript as plain text.
+                    lines: list[str] = []
+                    for m in non_system:
+                        role = (m.get("role") or "").strip().lower()
+                        label = "User" if role == "user" else "Assistant"
+                        text = str(m.get("content", "") or "")
+                        if text:
+                            lines.append(f"{label}: {text}")
+                    contents = "\n".join(lines) if lines else ""
 
             # Thinking config
             try:

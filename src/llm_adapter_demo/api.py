@@ -177,7 +177,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
             answer_text=normalized.get("text"),
             reasoning_text=normalized.get("reasoning"),
             raw_usage=normalized.get("usage"),
-            provider_response=jsonable_encoder(getattr(resp, "model_response", None) or resp),
+            provider_response=jsonable_encoder(resp),
             normalized_result=jsonable_encoder(llm_adapter.build_llm_result_from_response(resp, provider=provider)),
             provider_request=jsonable_encoder(provider_request),
             format_request=jsonable_encoder(
