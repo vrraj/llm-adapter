@@ -267,6 +267,49 @@ class LLMAdapter:
     ) -> LLMResult:
         """Build a normalized LLMResult from a non-streaming response."""
 
+        # If caller passed an AdapterResponse (from this adapter), prefer its already-derived
+        # fields (output_text/usage/status/finish_reason/metadata) and only fall back to
+        # provider-native parsing when missing.
+        adapter_usage: Optional[Dict[str, int]] = None
+        adapter_output_text: Optional[str] = None
+        adapter_status: Optional[str] = None
+        adapter_finish_reason: Optional[str] = None
+        adapter_metadata: Optional[Dict[str, Any]] = None
+        raw_resp: Any = resp
+        if isinstance(resp, AdapterResponse):
+            try:
+                raw_resp = resp.model_response or resp.adapter_response or resp
+            except Exception:
+                raw_resp = resp
+            try:
+                if isinstance(resp.usage, dict) and resp.usage:
+                    adapter_usage = dict(resp.usage)
+            except Exception:
+                adapter_usage = None
+            try:
+                if isinstance(resp.output_text, str) and resp.output_text.strip():
+                    adapter_output_text = resp.output_text.strip()
+            except Exception:
+                adapter_output_text = None
+            try:
+                if isinstance(resp.status, str) and resp.status:
+                    adapter_status = resp.status
+            except Exception:
+                adapter_status = None
+            try:
+                if isinstance(resp.finish_reason, str) and resp.finish_reason:
+                    adapter_finish_reason = resp.finish_reason
+            except Exception:
+                adapter_finish_reason = None
+            try:
+                if isinstance(resp.metadata, dict) and resp.metadata:
+                    adapter_metadata = dict(resp.metadata)
+            except Exception:
+                adapter_metadata = None
+
+        # Use raw_resp for any provider-native parsing below.
+        resp = raw_resp
+
         # Provider inference (optional): callers may pass provider and/or model_key.
         # If provider is not provided, infer it from:
         #   1) registry key (model_key), then
@@ -320,6 +363,11 @@ class LLMAdapter:
                 status = str(st_attr).strip() or None
             except Exception:
                 status = None
+        if adapter_status is not None:
+            try:
+                status = str(adapter_status).strip() or status
+            except Exception:
+                pass
         if not status:
             status = "completed"
 
@@ -330,6 +378,11 @@ class LLMAdapter:
                 finish_reason = str(fr_attr).strip() or None
         except Exception:
             finish_reason = None
+        if adapter_finish_reason is not None and not finish_reason:
+            try:
+                finish_reason = str(adapter_finish_reason).strip() or finish_reason
+            except Exception:
+                pass
 
         if finish_reason is None:
             fr2 = self._extract_finish_reason(resp)
@@ -385,7 +438,7 @@ class LLMAdapter:
 
         status = status_norm
 
-        usage_block = getattr(resp, "usage", None)
+        # Prefer AdapterResponse-provided usage when available; otherwise parse provider-native usage.
         usage: LLMAdapter.LLMUsage = {
             "input_tokens": 0,
             "cached_tokens": 0,
@@ -395,125 +448,160 @@ class LLMAdapter:
             "total_tokens": 0,
         }
 
-        if usage_block is not None:
+        def _apply_adapter_usage(u: Dict[str, Any]) -> None:
+            # AdapterResponse.usage may be Responses-style (input/output/total) or
+            # chat.completions-style (prompt/completion/total). Normalize into LLMUsage.
             try:
-                def _uget(obj: Any, name: str) -> Any:
-                    if obj is None:
-                        return None
-                    if isinstance(obj, dict):
-                        return obj.get(name)
-                    return getattr(obj, name, None)
+                it = u.get("input_tokens")
+                ot = u.get("output_tokens")
+                tt = u.get("total_tokens")
+                pt = u.get("prompt_tokens")
+                ct = u.get("completion_tokens")
+                cached = u.get("cached_tokens")
+                rtok = u.get("reasoning_tokens")
 
-                completion_tokens = None
-                if provider_norm == "openai":
-                    input_tokens = _uget(usage_block, "input_tokens")
-                    if input_tokens is None:
-                        input_tokens = _uget(usage_block, "prompt_tokens")
-
-                    output_tokens = _uget(usage_block, "output_tokens")
-                    if output_tokens is None:
-                        output_tokens = _uget(usage_block, "completion_tokens")
-
-                    total_tokens = _uget(usage_block, "total_tokens")
-
-                    details_in = _uget(usage_block, "prompt_tokens_details") or _uget(usage_block, "input_tokens_details")
-                    cached_tokens = (
-                        getattr(details_in, "cached_tokens", None)
-                        if details_in is not None and not isinstance(details_in, dict)
-                        else (details_in.get("cached_tokens") if isinstance(details_in, dict) else None)
-                    )
-
-                    details_out = _uget(usage_block, "output_tokens_details")
-                    reasoning_tokens = None
-                    print(f"[DEBUG build_llm_result_from_response] details_out: {details_out}")
-                    if details_out is not None:
-                        if isinstance(details_out, dict):
-                            reasoning_tokens = details_out.get("reasoning_tokens")
-                        else:
-                            reasoning_tokens = getattr(details_out, "reasoning_tokens", None)
-                        print(f"[DEBUG build_llm_result_from_response] extracted reasoning_tokens: {reasoning_tokens}")
-
-                    if reasoning_tokens is None:
-                        # OpenAI Responses API may expose reasoning usage under completion_tokens_details.
-                        details_out2 = _uget(usage_block, "completion_tokens_details")
-                        if details_out2 is not None:
-                            if isinstance(details_out2, dict):
-                                reasoning_tokens = details_out2.get("reasoning_tokens")
-                            else:
-                                reasoning_tokens = getattr(details_out2, "reasoning_tokens", None)
-                            print(f"[DEBUG build_llm_result_from_response] extracted reasoning_tokens from completion_tokens_details: {reasoning_tokens}")
-
-                elif provider_norm == "gemini":
-                    prompt_tokens = _uget(usage_block, "prompt_tokens")
-                    input_tokens = prompt_tokens if prompt_tokens is not None else _uget(usage_block, "input_tokens")
-
-                    completion_tokens_raw = _uget(usage_block, "completion_tokens")
-                    total_tokens = _uget(usage_block, "total_tokens")
-
-                    output_tokens = None
-                    cached_tokens = None
-                    reasoning_tokens = None
-
-                    if total_tokens is not None and input_tokens is not None:
-                        try:
-                            output_tokens = int(total_tokens) - int(input_tokens)
-                        except Exception:
-                            output_tokens = None
-
-                    if output_tokens is not None and completion_tokens_raw is not None:
-                        try:
-                            reasoning_tokens = int(output_tokens) - int(completion_tokens_raw)
-                            if reasoning_tokens < 0:
-                                reasoning_tokens = 0
-                        except Exception:
-                            reasoning_tokens = None
-
-                    completion_tokens = completion_tokens_raw
-
-                    if reasoning_tokens in (None, 0):
-                        # Gemini native SDK exposes a separate thoughts token count.
-                        try:
-                            raw_resp = getattr(resp, "model_response", None) or resp
-                            um2 = getattr(raw_resp, "usage_metadata", None)
-                            if um2 is None:
-                                um2 = getattr(raw_resp, "usageMetadata", None)
-                            if um2 is not None:
-                                rt = getattr(um2, "thoughts_token_count", None)
-                                if rt is None:
-                                    rt = getattr(um2, "thoughtsTokenCount", None)
-                                if rt is not None:
-                                    reasoning_tokens = int(rt or 0)
-                        except Exception:
-                            pass
-
-                else:
-                    input_tokens = output_tokens = cached_tokens = reasoning_tokens = total_tokens = None
-                    completion_tokens = None
-
-                input_tokens = input_tokens if input_tokens is not None else 0
-                output_tokens = output_tokens if output_tokens is not None else 0
-                cached_tokens = cached_tokens if cached_tokens is not None else 0
-                reasoning_tokens = reasoning_tokens if reasoning_tokens is not None else 0
-
-                if total_tokens is None:
-                    total_tokens = (input_tokens or 0) + (output_tokens or 0)
-
-                if completion_tokens is None:
+                if it is None and pt is not None:
+                    it = pt
+                if ot is None and ct is not None:
+                    ot = ct
+                if tt is None:
                     try:
-                        completion_tokens = int(output_tokens or 0) - int(reasoning_tokens or 0)
-                        if completion_tokens < 0:
-                            completion_tokens = 0
+                        tt = (int(it or 0) + int(ot or 0))
                     except Exception:
-                        completion_tokens = 0
+                        tt = 0
 
-                usage["input_tokens"] = int(input_tokens or 0)
-                usage["output_tokens"] = int(output_tokens or 0)
-                usage["total_tokens"] = int(total_tokens or 0)
-                usage["cached_tokens"] = int(cached_tokens or 0)
-                usage["reasoning_tokens"] = int(reasoning_tokens or 0)
-                usage["completion_tokens"] = int(completion_tokens or 0)
+                usage["input_tokens"] = int(it or 0)
+                usage["output_tokens"] = int(ot or 0)
+                usage["total_tokens"] = int(tt or 0)
+                usage["cached_tokens"] = int(cached or 0)
+                usage["reasoning_tokens"] = int(rtok or 0)
+
+                # completion_tokens should be visible output excluding reasoning where possible.
+                try:
+                    usage["completion_tokens"] = max(int(usage["output_tokens"]) - int(usage["reasoning_tokens"]), 0)
+                except Exception:
+                    usage["completion_tokens"] = int(ot or 0)
             except Exception:
                 pass
+
+        if adapter_usage is not None:
+            _apply_adapter_usage(adapter_usage)
+        else:
+            usage_block = getattr(resp, "usage", None)
+            if usage_block is not None:
+                try:
+                    def _uget(obj: Any, name: str) -> Any:
+                        if obj is None:
+                            return None
+                        if isinstance(obj, dict):
+                            return obj.get(name)
+                        return getattr(obj, name, None)
+
+                    completion_tokens = None
+                    if provider_norm == "openai":
+                        input_tokens = _uget(usage_block, "input_tokens")
+                        if input_tokens is None:
+                            input_tokens = _uget(usage_block, "prompt_tokens")
+
+                        output_tokens = _uget(usage_block, "output_tokens")
+                        if output_tokens is None:
+                            output_tokens = _uget(usage_block, "completion_tokens")
+
+                        total_tokens = _uget(usage_block, "total_tokens")
+
+                        details_in = _uget(usage_block, "prompt_tokens_details") or _uget(usage_block, "input_tokens_details")
+                        cached_tokens = (
+                            getattr(details_in, "cached_tokens", None)
+                            if details_in is not None and not isinstance(details_in, dict)
+                            else (details_in.get("cached_tokens") if isinstance(details_in, dict) else None)
+                        )
+
+                        details_out = _uget(usage_block, "output_tokens_details")
+                        reasoning_tokens = None
+                        if details_out is not None:
+                            if isinstance(details_out, dict):
+                                reasoning_tokens = details_out.get("reasoning_tokens")
+                            else:
+                                reasoning_tokens = getattr(details_out, "reasoning_tokens", None)
+
+                        if reasoning_tokens is None:
+                            details_out2 = _uget(usage_block, "completion_tokens_details")
+                            if details_out2 is not None:
+                                if isinstance(details_out2, dict):
+                                    reasoning_tokens = details_out2.get("reasoning_tokens")
+                                else:
+                                    reasoning_tokens = getattr(details_out2, "reasoning_tokens", None)
+
+                    elif provider_norm == "gemini":
+                        prompt_tokens = _uget(usage_block, "prompt_tokens")
+                        input_tokens = prompt_tokens if prompt_tokens is not None else _uget(usage_block, "input_tokens")
+
+                        completion_tokens_raw = _uget(usage_block, "completion_tokens")
+                        total_tokens = _uget(usage_block, "total_tokens")
+
+                        output_tokens = None
+                        cached_tokens = None
+                        reasoning_tokens = None
+
+                        if total_tokens is not None and input_tokens is not None:
+                            try:
+                                output_tokens = int(total_tokens) - int(input_tokens)
+                            except Exception:
+                                output_tokens = None
+
+                        if output_tokens is not None and completion_tokens_raw is not None:
+                            try:
+                                reasoning_tokens = int(output_tokens) - int(completion_tokens_raw)
+                                if reasoning_tokens < 0:
+                                    reasoning_tokens = 0
+                            except Exception:
+                                reasoning_tokens = None
+
+                        completion_tokens = completion_tokens_raw
+
+                        if reasoning_tokens in (None, 0):
+                            try:
+                                raw_r = getattr(resp, "model_response", None) or resp
+                                um2 = getattr(raw_r, "usage_metadata", None)
+                                if um2 is None:
+                                    um2 = getattr(raw_r, "usageMetadata", None)
+                                if um2 is not None:
+                                    rt = getattr(um2, "thoughts_token_count", None)
+                                    if rt is None:
+                                        rt = getattr(um2, "thoughtsTokenCount", None)
+                                    if rt is not None:
+                                        reasoning_tokens = int(rt or 0)
+                            except Exception:
+                                pass
+
+                    else:
+                        input_tokens = output_tokens = cached_tokens = reasoning_tokens = total_tokens = None
+                        completion_tokens = None
+
+                    input_tokens = input_tokens if input_tokens is not None else 0
+                    output_tokens = output_tokens if output_tokens is not None else 0
+                    cached_tokens = cached_tokens if cached_tokens is not None else 0
+                    reasoning_tokens = reasoning_tokens if reasoning_tokens is not None else 0
+
+                    if total_tokens is None:
+                        total_tokens = (input_tokens or 0) + (output_tokens or 0)
+
+                    if completion_tokens is None:
+                        try:
+                            completion_tokens = int(output_tokens or 0) - int(reasoning_tokens or 0)
+                            if completion_tokens < 0:
+                                completion_tokens = 0
+                        except Exception:
+                            completion_tokens = 0
+
+                    usage["input_tokens"] = int(input_tokens or 0)
+                    usage["output_tokens"] = int(output_tokens or 0)
+                    usage["total_tokens"] = int(total_tokens or 0)
+                    usage["cached_tokens"] = int(cached_tokens or 0)
+                    usage["reasoning_tokens"] = int(reasoning_tokens or 0)
+                    usage["completion_tokens"] = int(completion_tokens or 0)
+                except Exception:
+                    pass
 
         def _safe_get(obj: Any, name: str) -> Any:
             try:
@@ -524,6 +612,8 @@ class LLMAdapter:
                 return None
 
         text_candidates: list[str] = []
+        if adapter_output_text is not None:
+            text_candidates.append(adapter_output_text)
         try:
             ot = _safe_get(resp, "output_text")
             if isinstance(ot, str) and ot.strip():
@@ -633,12 +723,15 @@ class LLMAdapter:
             pass
 
         metadata: Optional[Dict[str, Any]] = None
-        try:
-            md = getattr(resp, "metadata", None)
-            if isinstance(md, dict):
-                metadata = md
-        except Exception:
-            metadata = None
+        if adapter_metadata is not None:
+            metadata = adapter_metadata
+        else:
+            try:
+                md = getattr(resp, "metadata", None)
+                if isinstance(md, dict):
+                    metadata = md
+            except Exception:
+                metadata = None
 
         result: LLMAdapter.LLMResult = {
             "provider": provider_norm,
@@ -653,7 +746,7 @@ class LLMAdapter:
             "metadata": metadata,
             "usage": usage,
             "tool_calls": tool_calls,
-            "raw": getattr(resp, "model_response", None) or resp,
+            "raw": resp,
         }
         return result
 
@@ -761,49 +854,216 @@ class LLMAdapter:
             out["adapter"] = {"dropped_kwargs": dict(dropped_kwargs)}
         return out
 
-    def _extract_openai_response_usage(self, resp: Any) -> Optional[Dict[str, int]]:
-        try:
-            u = getattr(resp, "usage", None)
-            if u is None:
-                return None
-            it = getattr(u, "input_tokens", None)
-            ot = getattr(u, "output_tokens", None)
-            tt = getattr(u, "total_tokens", None)
-            reasoning = None
+    def _extract_openai_response_usage(self, resp: Any, endpoint: str) -> Optional[Dict[str, int]]:
+        if endpoint == "responses":
+            try:
+                u = getattr(resp, "usage", None)
+                if u is None:
+                    return None
+                it = getattr(u, "input_tokens", None)
+                ot = getattr(u, "output_tokens", None)
+                tt = getattr(u, "total_tokens", None)
+                reasoning = None
 
-            # Extract reasoning_tokens from output_tokens_details if present
-            out_details = getattr(u, "output_tokens_details", None)
+                # Extract reasoning_tokens from output_tokens_details if present
+                out_details = getattr(u, "output_tokens_details", None)
     
-            if out_details is not None:
-                reasoning = getattr(out_details, "reasoning_tokens", None)
-                print(f"[DEBUG _extract_openai_response_usage] reasoning: {reasoning}")
-            if it is not None or ot is not None or tt is not None:
-                out: Dict[str, int] = {}
-                if it is not None:
-                    out["input_tokens"] = int(it or 0)
-                if ot is not None:
-                    out["output_tokens"] = int(ot or 0)
-                if tt is not None:
-                    out["total_tokens"] = int(tt or ((it or 0) + (ot or 0)))
-                if reasoning is not None:
-                    out["reasoning_tokens"] = int(reasoning or 0)
-                print(f"[DEBUG _extract_openai_response_usage] final out dict: {out}")
-                return out
+                if out_details is not None:
+                    reasoning = getattr(out_details, "reasoning_tokens", None)
+                    print(f"[DEBUG _extract_openai_response_usage] reasoning: {reasoning}")
+                if it is not None or ot is not None or tt is not None:
+                    out: Dict[str, int] = {}
+                    if it is not None:
+                        out["input_tokens"] = int(it or 0)
+                    if ot is not None:
+                        out["output_tokens"] = int(ot or 0)
+                    if tt is not None:
+                        out["total_tokens"] = int(tt or ((it or 0) + (ot or 0)))
+                    if reasoning is not None:
+                        out["reasoning_tokens"] = int(reasoning or 0)
+                    print(f"[DEBUG _extract_openai_response_usage] final out dict: {out}")
+                    return out
+            except Exception:
+                return None
+        elif endpoint == "chat_completions":
+            try:
+                u = getattr(resp, "usage", None)
+                if u is None:
+                    print(f"[DEBUG _extract_openai_response_usage] chatcompletion - usage object is None")
+                    return None
+                print(f"[DEBUG _extract_openai_response_usage] chatcompletion - usage object: {u}")
+                pt = getattr(u, "prompt_tokens", None)
+                ct = getattr(u, "completion_tokens", None)
+                tt2 = getattr(u, "total_tokens", None)
+                print(f"[DEBUG _extract_openai_response_usage] chatcompletion - pt: {pt}, ct: {ct}, tt2: {tt2}")
+                #Extract cached_content_tokens from prompt_tokens_details if present
+                cached_details = getattr(u, "prompt_tokens_details", None)
+                cc = None
+                if cached_details is not None:
+                    cc = getattr(cached_details, "cached_tokens", None)
 
-            pt = getattr(u, "prompt_tokens", None)
-            ct = getattr(u, "completion_tokens", None)
-            tt2 = getattr(u, "total_tokens", None)
-            if pt is not None or ct is not None or tt2 is not None:
-                out2 = {
-                    "prompt_tokens": int(pt or 0),
-                    "completion_tokens": int(ct or 0),
-                    "total_tokens": int(tt2 or ((pt or 0) + (ct or 0))),
-                }
-                if reasoning is not None:
-                    out2["reasoning_tokens"] = int(reasoning or 0)
-                return out2
-        except Exception:
-            return None
+                reasoning = None
+                
+                if pt is not None or ct is not None or tt2 is not None:
+                    out2 = {
+                        "prompt_tokens": int(pt or 0),
+                        "completion_tokens": int(ct or 0),
+                        "total_tokens": int(tt2 or ((pt or 0) + (ct or 0))),
+                        "cached_tokens": int(cc or 0),
+                    }
+                    # Extract reasoning_tokens from completion_tokens_details if present
+                    completion_tokens_details = getattr(u, "completion_tokens_details", None)
+    
+                    if completion_tokens_details is not None:
+                        reasoning = getattr(completion_tokens_details, "reasoning_tokens", None)
+                        print(f"[DEBUG _extract_openai_response_usage] reasoning: {reasoning}")
+                    if reasoning is not None:
+                        out2["reasoning_tokens"] = int(reasoning)
+                    return out2
+            except Exception:
+                return None
+        return None
+
+    def _extract_gemini_response_usage(self, resp: Any, endpoint: str) -> Optional[Dict[str, int]]:
+        """Extract usage information from Gemini responses.
+        
+        Handles both Gemini chat completions (OpenAI-compatible) and Gemini native SDK responses.
+        
+        Args:
+            resp: The response object from Gemini API
+            endpoint: Either "chatcompletion" for OpenAI-compatible or "gemini_sdk" for native SDK
+            
+        Returns:
+            Dictionary with usage metrics or None if not available
+        """
+        if endpoint == "chat_completions":
+            # Gemini OpenAI-compatible chat completions
+            try:
+                u = getattr(resp, "usage", None)
+                if u is None:
+                    print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - usage object is None")
+                    return None
+                print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - usage object: {u}")
+                print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - usage type: {type(u)}")
+                pt = u.get("prompt_tokens") if isinstance(u, dict) else getattr(u, "prompt_tokens", None)
+                ct = u.get("completion_tokens") if isinstance(u, dict) else getattr(u, "completion_tokens", None)
+                tt = u.get("total_tokens") if isinstance(u, dict) else getattr(u, "total_tokens", None)
+                print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - extracted pt: {pt}, ct: {ct}, tt: {tt}")
+
+                #Extract cached_content_tokens from prompt_tokens_details if present
+                cached_details = getattr(u, "prompt_tokens_details", None)
+                cc = None
+                if cached_details is not None:
+                    cc = getattr(cached_details, "cached_tokens", None)
+                
+                if pt is not None or ct is not None or tt is not None:
+                    print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - condition passed, creating usage_dict")
+                    usage_dict = {
+                        "prompt_tokens": int(pt or 0),
+                        "completion_tokens": int(ct or 0),
+                        "total_tokens": int(tt or ((pt or 0) + (ct or 0))),
+                        "cached_tokens": int(cc or 0),
+                    }
+
+                    # Extract reasoning_tokens from completion_tokens_details if present
+                    reasoning = None
+                    completion_tokens_details = getattr(u, "completion_tokens_details", None)
+                    print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - completion_tokens_details: {completion_tokens_details}")
+
+                    if completion_tokens_details is not None:
+                        reasoning = getattr(completion_tokens_details, "reasoning_tokens", None)
+                        print(f"[DEBUG _extract_gemini_response_usage] reasoning: {reasoning}")
+
+                    if reasoning is not None:
+                        usage_dict["reasoning_tokens"] = int(reasoning)
+
+                    try:
+                        print(f"[DEBUG _extract_gemini_response_usage] chatcompletion final usage_dict: {usage_dict}")
+                    except Exception as e:
+                        print(f"[DEBUG _extract_gemini_response_usage] print exception: {e}")
+                        print(f"[DEBUG _extract_gemini_response_usage] usage_dict type: {type(usage_dict)}")
+                    return usage_dict
+            except Exception:
+                return None
+                
+        elif endpoint == "gemini_sdk":
+            # Gemini native SDK response (google-genai). In Python this is typically `resp.usage_metadata`
+            # with snake_case fields: prompt_token_count, candidates_token_count, thoughts_token_count, total_token_count.
+            try:
+                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - endpoint: {endpoint} - resp type: {type(resp)}")
+
+                # Unwrap AdapterResponse if caller passed it
+                raw = resp
+                try:
+                    if isinstance(resp, AdapterResponse):
+                        raw = resp.model_response or resp.adapter_response or resp
+                except Exception:
+                    raw = resp
+
+                # Find usage metadata (object or dict)
+                um = None
+                if isinstance(raw, dict):
+                    um = raw.get("usage_metadata") or raw.get("usageMetadata")
+                    # Some wrappers nest the response
+                    if um is None and isinstance(raw.get("response"), dict):
+                        um = raw["response"].get("usage_metadata") or raw["response"].get("usageMetadata")
+                else:
+                    um = getattr(raw, "usage_metadata", None)
+                    if um is None:
+                        um = getattr(raw, "usageMetadata", None)
+
+                if um is None:
+                    print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - usage metadata object is None")
+                    print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - raw type: {type(raw)}")
+                    return None
+
+                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - raw type: {type(raw)}")
+                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - usage metadata type: {type(um)}")
+
+                def _um_get(name_snake: str, name_camel: str) -> Any:
+                    if um is None:
+                        return None
+                    if isinstance(um, dict):
+                        return um.get(name_snake) if name_snake in um else um.get(name_camel)
+                    v = getattr(um, name_snake, None)
+                    if v is None:
+                        v = getattr(um, name_camel, None)
+                    return v
+
+                # Native SDK (google-genai) snake_case fields
+                pt = _um_get("prompt_token_count", "promptTokenCount")
+                ct = _um_get("candidates_token_count", "candidatesTokenCount")
+                tt = _um_get("total_token_count", "totalTokenCount")
+                reasoning = _um_get("thoughts_token_count", "thoughtsTokenCount")
+                cc = _um_get("cached_content_token_count", "cachedContentTokenCount")
+
+                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - extracted pt: {pt}, ct: {ct}, tt: {tt}")
+                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - extracted cc: {cc}, reasoning: {reasoning}")
+
+                if pt is not None or ct is not None or tt is not None:
+                    usage_dict: Dict[str, int] = {
+                        "prompt_tokens": int(pt or 0),
+                        # Visible output tokens only (Gemini calls these candidates tokens)
+                        "completion_tokens": int(ct or 0),
+                        # Total includes prompt + candidates + thoughts
+                        "total_tokens": int(tt or ((pt or 0) + (ct or 0) + (reasoning or 0))),
+                        "reasoning_tokens": int(reasoning or 0),
+                    }
+
+                    # Keep a consistent cached token key across the adapter
+                    if cc is not None:
+                        usage_dict["cached_tokens"] = int(cc or 0)
+                        # Back-compat alias (some callers may have expected this)
+                        usage_dict["cached_content_tokens"] = int(cc or 0)
+                    else:
+                        usage_dict["cached_tokens"] = 0
+
+                    print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk final usage_dict: {usage_dict}")
+                    return usage_dict
+            except Exception as e:
+                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - exception: {e}")
+                return None
+                
         return None
 
     def _extract_openai_chatcompletion_text(self, resp: Any) -> str:
@@ -1326,33 +1586,15 @@ class LLMAdapter:
             output_list[0]["content"].extend(tool_calls)
 
         # Best-effort usage mapping to Responses-style keys
-        usage_like: Optional[Dict[str, int]] = None
-        try:
-            u = _safe_get(resp, "usage")
-            if u is not None:
-                # OpenAI/Gemini adapter chat.completions typically uses prompt_tokens/completion_tokens/total_tokens
-                def _uget(obj: Any, key: str) -> Any:
-                    if isinstance(obj, dict):
-                        return obj.get(key)
-                    return getattr(obj, key, None)
-
-                pt = _uget(u, "prompt_tokens")
-                ct = _uget(u, "completion_tokens")
-                tt = _uget(u, "total_tokens")
-                usage_like = {
-                    "prompt_tokens": int(pt or 0),
-                    "completion_tokens": int(ct or 0),
-                    "total_tokens": int(tt or ((pt or 0) + (ct or 0))),
-                }
-        except Exception:
-            usage_like = None
+        usage_dict = self._extract_gemini_response_usage(resp, "chat_completions")
+        print(f"[DEBUG _wrap_gemini_chatcompletion_as_responses] usage dict: {usage_dict}")
 
         # Wrap as AdapterResponse (Responses-like shim)
         finish_reason = self._extract_finish_reason(resp)
         return AdapterResponse(
             output_text=text or "",
             model=resolved_model,
-            usage=usage_like,
+            usage=usage_dict,
             metadata=self._build_adapter_response_metadata(
                 provider="gemini",
                 model_key=model_key,
@@ -1568,7 +1810,7 @@ class LLMAdapter:
                 elif status_norm == "completed":
                     status = "completed"
 
-            usage_dict = self._extract_openai_response_usage(resp)
+            usage_dict = self._extract_openai_response_usage(resp, endpoint)
             print(f"[DEBUG _openai_call Responses] usage dict for AdapterResponse: {usage_dict}")
             return AdapterResponse(
                 output_text=text,
@@ -1602,10 +1844,12 @@ class LLMAdapter:
                     **mapped_kwargs,
                 )
                 finish_reason = self._extract_openai_chatcompletion_finish_reason(resp)
+                usage_dict = self._extract_openai_response_usage(resp, endpoint)
+                print(f"[DEBUG _openai_call ChatCompletions] usage dict for AdapterResponse: {usage_dict}")
                 return AdapterResponse(
                     output_text=self._extract_openai_chatcompletion_text(resp),
                     model=resolved_model,
-                    usage=self._extract_openai_response_usage(resp),
+                    usage=usage_dict,
                     metadata=self._build_adapter_response_metadata(
                         provider="openai",
                         model_key=model,
@@ -1971,18 +2215,8 @@ class LLMAdapter:
                     ) from e
 
                 text = _extract_native_text_with_collapsed_thoughts(resp)
-                usage_like: Optional[Dict[str, int]] = None
-                try:
-                    um = getattr(resp, "usage_metadata", None)
-                    if um is not None:
-                        pt = getattr(um, "prompt_token_count", None)
-                        tt = getattr(um, "total_token_count", None)
-                        usage_like = {
-                            "prompt_tokens": int(pt or 0),
-                            "total_tokens": int(tt or pt or 0),
-                        }
-                except Exception:
-                    usage_like = None
+                usage_dict = self._extract_gemini_response_usage(resp, "gemini_sdk")
+                print(f"[DEBUG _gemini_call Native SDK] usage dict for AdapterResponse: {usage_dict}")
 
                 class _GeminiSDKResponsesWrapper:
                     def __init__(
@@ -2013,7 +2247,7 @@ class LLMAdapter:
                 wrapper = _GeminiSDKResponsesWrapper(
                     output_text=text,
                     output=output_list,
-                    usage=usage_like,
+                    usage=usage_dict,
                     model=resolved_model,
                     model_response=resp,
                     finish_reason=None,
@@ -2035,7 +2269,7 @@ class LLMAdapter:
                 return AdapterResponse(
                     output_text=text,
                     model=resolved_model,
-                    usage=usage_like,
+                    usage=usage_dict,
                     metadata=self._build_adapter_response_metadata(
                         provider="gemini",
                         model_key=model,
