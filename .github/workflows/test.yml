@@ -1,4 +1,4 @@
-name: CI
+name: CI_v2
 
 on:
   push:
