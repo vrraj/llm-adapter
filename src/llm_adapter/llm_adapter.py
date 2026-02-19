@@ -2,7 +2,8 @@ from openai import OpenAI
 import openai
 import os
 import logging
-from typing import Any, Dict, Optional, Iterator, TypedDict, List
+import time
+from typing import Any, Dict, Optional, Iterator, TypedDict, List, Callable
 
 # Load environment variables from .env file
 try:
@@ -151,7 +152,7 @@ class LLMAdapter:
         self._openai = openai_client
         self._gemini = gemini_client
         self._gemini_native = None
-
+        self.metadata_hook: Optional[Callable[[Dict[str, Any], Any], Dict[str, Any]]] = None
         self.responses = _ResponsesFacade(self)
         self.embeddings = _EmbeddingsFacade(self)
 
@@ -180,6 +181,7 @@ class LLMAdapter:
         finish_reason: Optional[str]
         usage: "LLMAdapter.LLMUsage"
         tool_calls: List["LLMAdapter.LLMToolCall"]
+        metadata: Optional[Dict[str, Any]]
         raw: Any
 
     def _extract_finish_reason(self, resp: Any) -> Optional[str]:
@@ -260,7 +262,7 @@ class LLMAdapter:
 
     def build_llm_result_from_response(
         self,
-        resp: Any,
+        resp: Any, # AdapterResponse from llm_adapter.create(...)
         *,
         provider: Optional[str] = None,
         model_key: Optional[str] = None,
@@ -337,20 +339,46 @@ class LLMAdapter:
         if not provider_norm:
             provider_norm = "openai"
 
+        # Prefer AdapterResponse-derived model/metadata when available.
         try:
-            model = getattr(resp, "model", None) or ""
+            model = (
+                (getattr(raw_resp, "model", None) if isinstance(raw_resp, AdapterResponse) else None)
+                or getattr(resp, "model", None)
+                or ""
+            )
         except Exception:
             model = ""
 
-        try:
-            rid = getattr(resp, "id", None)
-        except Exception:
-            rid = None
+        rid = None
+        created_at = None
 
-        try:
-            created_at = getattr(resp, "created_at", None)
-        except Exception:
-            created_at = None
+        # Prefer normalized metadata fields set at AdapterResponse creation time.
+        if isinstance(adapter_metadata, dict) and adapter_metadata:
+            rid = adapter_metadata.get("provider_response_id") or rid
+            created_at = adapter_metadata.get("provider_created_at") or created_at
+
+        # Fallback to provider-native fields.
+        if rid is None:
+            try:
+                rid = getattr(resp, "id", None)
+            except Exception:
+                rid = None
+            if rid is None:
+                try:
+                    rid = getattr(resp, "response_id", None) or getattr(resp, "responseId", None)
+                except Exception:
+                    rid = None
+
+        if created_at is None:
+            try:
+                created_at = getattr(resp, "created_at", None)
+            except Exception:
+                created_at = None
+            if created_at is None:
+                try:
+                    created_at = getattr(resp, "created", None)
+                except Exception:
+                    created_at = None
 
         try:
             st_attr = getattr(resp, "status", None)
@@ -853,6 +881,86 @@ class LLMAdapter:
         if isinstance(dropped_kwargs, dict) and dropped_kwargs:
             out["adapter"] = {"dropped_kwargs": dict(dropped_kwargs)}
         return out
+
+    def _assemble_adapter_response_metadata(
+        self,
+        *,
+        provider: str,
+        model_key: str,
+        resolved_model: str,
+        endpoint: Optional[str] = None,
+        raw_response: Any = None,
+        dropped_kwargs: Optional[Dict[str, str]] = None,
+        now_ts: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        meta = self._build_adapter_response_metadata(
+            provider=provider,
+            model_key=model_key,
+            resolved_model=resolved_model,
+            dropped_kwargs=dropped_kwargs,
+        )
+
+        if endpoint:
+            meta["endpoint"] = str(endpoint)
+
+        def _safe_get(obj: Any, name: str) -> Any:
+            try:
+                if obj is None:
+                    return None
+                if isinstance(obj, dict):
+                    return obj.get(name)
+                return getattr(obj, name, None)
+            except Exception:
+                return None
+
+        def _safe_get_nested(obj: Any, name: str) -> Any:
+            v = _safe_get(obj, name)
+            if v is not None:
+                return v
+            if isinstance(obj, dict):
+                for k in ("response", "data", "result"):
+                    inner = obj.get(k)
+                    if isinstance(inner, dict):
+                        vv = inner.get(name)
+                        if vv is not None:
+                            return vv
+            return None
+
+        raw = raw_response
+
+        # ---- provider_response_id ----
+        rid = _safe_get_nested(raw, "id")
+        if rid is None:
+            rid = _safe_get_nested(raw, "response_id")
+        if rid is None:
+            rid = _safe_get_nested(raw, "responseId")
+
+        if rid is not None:
+            meta["provider_response_id"] = str(rid)
+
+        # ---- provider_created_at ----
+        created = _safe_get_nested(raw, "created_at")
+        if created is None:
+            created = _safe_get_nested(raw, "created")
+
+        if created is None and str(provider).lower() == "gemini" and str(endpoint or "").lower() == "gemini_sdk":
+            import time
+            created = int(time.time())
+
+        if created is not None:
+            try:
+                meta["provider_created_at"] = int(created)
+            except Exception:
+                meta["provider_created_at"] = created
+
+        # optional hook
+        hook = getattr(self, "metadata_hook", None)
+        if callable(hook):
+            updated = hook(dict(meta), raw)
+            if isinstance(updated, dict) and updated:
+                meta = updated
+
+        return meta
 
     def _extract_openai_response_usage(self, resp: Any, endpoint: str) -> Optional[Dict[str, int]]:
         if endpoint == "responses":
@@ -1588,18 +1696,21 @@ class LLMAdapter:
         # Best-effort usage mapping to Responses-style keys
         usage_dict = self._extract_gemini_response_usage(resp, "chat_completions")
         print(f"[DEBUG _wrap_gemini_chatcompletion_as_responses] usage dict: {usage_dict}")
-
+        metadata_dict = self._assemble_adapter_response_metadata(
+            provider="gemini",
+            model_key=model_key,
+            resolved_model=resolved_model,
+            endpoint="chat_completions",
+            raw_response=resp,
+        )
+        print(f"[DEBUG _wrap_gemini_chatcompletion_as_responses] metadata dict: {metadata_dict}")
         # Wrap as AdapterResponse (Responses-like shim)
         finish_reason = self._extract_finish_reason(resp)
         return AdapterResponse(
             output_text=text or "",
             model=resolved_model,
             usage=usage_dict,
-            metadata=self._build_adapter_response_metadata(
-                provider="gemini",
-                model_key=model_key,
-                resolved_model=resolved_model,
-            ),
+            metadata=metadata_dict,
             adapter_response={"output": output_list},
             model_response=resp,
             status=self._map_completion_status_from_finish_reason(finish_reason),
@@ -1812,15 +1923,19 @@ class LLMAdapter:
 
             usage_dict = self._extract_openai_response_usage(resp, endpoint)
             print(f"[DEBUG _openai_call Responses] usage dict for AdapterResponse: {usage_dict}")
+            metadata_dict = self._assemble_adapter_response_metadata(
+                provider="openai",
+                model_key=model,
+                resolved_model=resolved_model,
+                endpoint=endpoint,
+                raw_response=resp,
+            )
+            print(f"[DEBUG _openai_call Responses] metadata dict for AdapterResponse: {metadata_dict}")
             return AdapterResponse(
                 output_text=text,
                 model=resolved_model,
                 usage=usage_dict,
-                metadata=self._build_adapter_response_metadata(
-                    provider="openai",
-                    model_key=model,
-                    resolved_model=resolved_model,
-                ),
+                metadata=metadata_dict,
                 adapter_response=resp,
                 model_response=resp,
                 status=status or ("incomplete" if finish_reason else "completed"),
@@ -1846,15 +1961,19 @@ class LLMAdapter:
                 finish_reason = self._extract_openai_chatcompletion_finish_reason(resp)
                 usage_dict = self._extract_openai_response_usage(resp, endpoint)
                 print(f"[DEBUG _openai_call ChatCompletions] usage dict for AdapterResponse: {usage_dict}")
+                metadata_dict = self._assemble_adapter_response_metadata(
+                    provider="openai",
+                    model_key=model,
+                    resolved_model=resolved_model,
+                    endpoint=endpoint,
+                    raw_response=resp,
+                )
+                print(f"[DEBUG _openai_call ChatCompletions] metadata dict for AdapterResponse: {metadata_dict}")
                 return AdapterResponse(
                     output_text=self._extract_openai_chatcompletion_text(resp),
                     model=resolved_model,
                     usage=usage_dict,
-                    metadata=self._build_adapter_response_metadata(
-                        provider="openai",
-                        model_key=model,
-                        resolved_model=resolved_model,
-                    ),
+                    metadata=metadata_dict,
                     adapter_response=resp,
                     model_response=resp,
                     status=self._map_completion_status_from_finish_reason(finish_reason),
@@ -2265,16 +2384,18 @@ class LLMAdapter:
                             finish_reason = str(fr)
                 except Exception:
                     finish_reason = None
-
+                metadata_dict = self._assemble_adapter_response_metadata(
+                    provider="gemini",
+                    model_key=model,
+                    resolved_model=resolved_model,
+                    endpoint=endpoint, #gemini_sdk
+                    raw_response=resp,
+                )
                 return AdapterResponse(
                     output_text=text,
                     model=resolved_model,
                     usage=usage_dict,
-                    metadata=self._build_adapter_response_metadata(
-                        provider="gemini",
-                        model_key=model,
-                        resolved_model=resolved_model,
-                    ),
+                    metadata=metadata_dict,
                     adapter_response=wrapper,
                     model_response=resp,
                     status=self._map_gemini_native_status_from_finish_reason(finish_reason),

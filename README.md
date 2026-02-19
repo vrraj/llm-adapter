@@ -442,6 +442,10 @@ When `stream=True`, `llm_adapter.create(...)` returns an **iterator**, not a nor
 
 **Usage Example:** `python examples/test_streaming.py --provider openai --model openai:gpt-4o-mini --prompt "explain quantum physics in less than 50 words"`
 
+## Response Structure
+
+For detailed information about the `AdapterResponse` format, serialization behavior, and field naming conventions, see **[AdapterResponse.md](AdapterResponse.md)**.
+
 ## API Reference
 
 Below are the primary public APIs exposed by `llm_adapter`.
