@@ -884,6 +884,107 @@ class LLMAdapter:
             out["adapter"] = {"dropped_kwargs": dict(dropped_kwargs)}
         return out
 
+    class _GeminiSDKResponsesWrapper:
+        def __init__(
+            self,
+            *,
+            output_text: str,
+            output: Any,
+            usage: Optional[Dict[str, int]],
+            model: str,
+            model_response: Any,
+            finish_reason: Optional[str] = None,
+        ) -> None:
+            self.output_text = output_text
+            self.output = output
+            self.usage = usage
+            self.model = model
+            self.model_response = model_response
+            self.finish_reason = finish_reason
+
+    def _extract_native_text(self, resp: Any) -> str:
+        try:
+            if hasattr(resp, "text") and isinstance(resp.text, str):
+                return resp.text
+        except Exception:
+            pass
+        try:
+            candidates = getattr(resp, "candidates", None)
+            if isinstance(candidates, list) and candidates:
+                cand = candidates[0]
+                content = getattr(cand, "content", None)
+                parts = getattr(content, "parts", None) if content is not None else None
+                if isinstance(parts, list) and parts:
+                    for p in parts:
+                        if isinstance(p, str) and p.strip():
+                            return p
+                        txt = getattr(p, "text", None)
+                        if isinstance(txt, str) and txt.strip():
+                            return txt
+        except Exception:
+            pass
+        try:
+            return str(resp)
+        except Exception:
+            return ""
+
+    def _extract_native_text_with_collapsed_thoughts(self, resp: Any) -> str:
+        try:
+            candidates = getattr(resp, "candidates", None)
+            if not isinstance(candidates, list) or not candidates:
+                return self._extract_native_text(resp)
+            cand = candidates[0]
+            content = getattr(cand, "content", None)
+            parts = getattr(content, "parts", None) if content is not None else None
+            if not isinstance(parts, list) or not parts:
+                return self._extract_native_text(resp)
+
+            thought_texts: list[str] = []
+            answer_texts: list[str] = []
+            for p in parts:
+                if isinstance(p, str):
+                    if p.strip():
+                        answer_texts.append(p)
+                    continue
+                txt = getattr(p, "text", None)
+                if not isinstance(txt, str) or not txt.strip():
+                    continue
+                is_thought = False
+                try:
+                    is_thought = (getattr(p, "thought", None) is True)
+                except Exception:
+                    is_thought = False
+                if is_thought:
+                    thought_texts.append(txt)
+                else:
+                    answer_texts.append(txt)
+
+            if thought_texts:
+                thought_block = "\n\n".join([t.strip() for t in thought_texts if t.strip()])
+                answer_block = "\n\n".join([t.strip() for t in answer_texts if t.strip()])
+                if answer_block:
+                    return f"<thought>\n{thought_block}\n</thought>\n\n{answer_block}".strip()
+                return f"<thought>\n{thought_block}\n</thought>".strip()
+
+            if answer_texts:
+                return "\n\n".join([t.strip() for t in answer_texts if t.strip()]).strip()
+            return self._extract_native_text(resp)
+        except Exception:
+            return self._extract_native_text(resp)
+
+    def _clean_schema(self, obj: Any) -> Any:
+        if isinstance(obj, list):
+            return [self._clean_schema(x) for x in obj]
+        if not isinstance(obj, dict):
+            return obj
+        forbidden = {"default", "title", "$schema", "additionalProperties", "additional_properties"}
+        out: Dict[str, Any] = {}
+        for k, v in obj.items():
+            if k in forbidden:
+                continue
+            out[k] = self._clean_schema(v)
+        return out
+
     def _assemble_adapter_response_metadata(
         self,
         *,
@@ -2087,76 +2188,8 @@ class LLMAdapter:
         if endpoint == "gemini_sdk":
             native_client = client
 
-            def _extract_native_text(resp: Any) -> str:
-                try:
-                    if hasattr(resp, "text") and isinstance(resp.text, str):
-                        return resp.text
-                except Exception:
-                    pass
-                try:
-                    candidates = getattr(resp, "candidates", None)
-                    if isinstance(candidates, list) and candidates:
-                        cand = candidates[0]
-                        content = getattr(cand, "content", None)
-                        parts = getattr(content, "parts", None) if content is not None else None
-                        if isinstance(parts, list) and parts:
-                            for p in parts:
-                                if isinstance(p, str) and p.strip():
-                                    return p
-                                txt = getattr(p, "text", None)
-                                if isinstance(txt, str) and txt.strip():
-                                    return txt
-                except Exception:
-                    pass
-                try:
-                    return str(resp)
-                except Exception:
-                    return ""
-
-            def _extract_native_text_with_collapsed_thoughts(resp: Any) -> str:
-                try:
-                    candidates = getattr(resp, "candidates", None)
-                    if not isinstance(candidates, list) or not candidates:
-                        return _extract_native_text(resp)
-                    cand = candidates[0]
-                    content = getattr(cand, "content", None)
-                    parts = getattr(content, "parts", None) if content is not None else None
-                    if not isinstance(parts, list) or not parts:
-                        return _extract_native_text(resp)
-
-                    thought_texts: list[str] = []
-                    answer_texts: list[str] = []
-                    for p in parts:
-                        if isinstance(p, str):
-                            if p.strip():
-                                answer_texts.append(p)
-                            continue
-                        txt = getattr(p, "text", None)
-                        if not isinstance(txt, str) or not txt.strip():
-                            continue
-                        is_thought = False
-                        try:
-                            is_thought = (getattr(p, "thought", None) is True)
-                        except Exception:
-                            is_thought = False
-                        if is_thought:
-                            thought_texts.append(txt)
-                        else:
-                            answer_texts.append(txt)
-
-                    if thought_texts:
-                        thought_block = "\n\n".join([t.strip() for t in thought_texts if t.strip()])
-                        answer_block = "\n\n".join([t.strip() for t in answer_texts if t.strip()])
-                        if answer_block:
-                            return f"<thought>\n{thought_block}\n</thought>\n\n{answer_block}".strip()
-                        return f"<thought>\n{thought_block}\n</thought>".strip()
-
-                    if answer_texts:
-                        return "\n\n".join([t.strip() for t in answer_texts if t.strip()]).strip()
-                    return _extract_native_text(resp)
-                except Exception:
-                    return _extract_native_text(resp)
-
+            
+            
             # Build contents + config for google-genai.
             # Start from already-prepared kwargs so canonical token handling and thinking config stay consistent.
             sdk_kwargs: Dict[str, Any] = dict(working_kwargs or {}) if isinstance(working_kwargs, dict) else {}
@@ -2257,19 +2290,7 @@ class LLMAdapter:
                 if isinstance(raw_tools, list) and raw_tools:
                     from google.genai import types as _types  # type: ignore
 
-                    def _clean_schema(obj: Any) -> Any:
-                        if isinstance(obj, list):
-                            return [_clean_schema(x) for x in obj]
-                        if not isinstance(obj, dict):
-                            return obj
-                        forbidden = {"default", "title", "$schema", "additionalProperties", "additional_properties"}
-                        out: Dict[str, Any] = {}
-                        for k, v in obj.items():
-                            if k in forbidden:
-                                continue
-                            out[k] = _clean_schema(v)
-                        return out
-
+                    
                     fdecls: list[Any] = []
                     for t in raw_tools:
                         if not isinstance(t, dict):
@@ -2280,7 +2301,7 @@ class LLMAdapter:
                             continue
                         desc = (func.get("description") or "") if isinstance(func, dict) else ""
                         params = (func.get("parameters") or {"type": "OBJECT", "properties": {}}) if isinstance(func, dict) else {"type": "OBJECT", "properties": {}}
-                        params = _clean_schema(params)
+                        params = self._clean_schema(params)
                         try:
                             if isinstance(params, dict) and isinstance(params.get("type"), str):
                                 params["type"] = str(params.get("type")).strip().upper()
@@ -2339,28 +2360,11 @@ class LLMAdapter:
                         message=str(e),
                     ) from e
 
-                text = _extract_native_text_with_collapsed_thoughts(resp)
+                text = self._extract_native_text_with_collapsed_thoughts(resp)
                 usage_dict = self._extract_gemini_response_usage(resp, "gemini_sdk")
                 print(f"[DEBUG _gemini_call Native SDK] usage dict for AdapterResponse: {usage_dict}")
 
-                class _GeminiSDKResponsesWrapper:
-                    def __init__(
-                        self,
-                        *,
-                        output_text: str,
-                        output: Any,
-                        usage: Optional[Dict[str, int]],
-                        model: str,
-                        model_response: Any,
-                        finish_reason: Optional[str] = None,
-                    ) -> None:
-                        self.output_text = output_text
-                        self.output = output
-                        self.usage = usage
-                        self.model = model
-                        self.model_response = model_response
-                        self.finish_reason = finish_reason
-
+                
                 output_list = [
                     {
                         "type": "message",
@@ -2369,7 +2373,7 @@ class LLMAdapter:
                     }
                 ]
 
-                wrapper = _GeminiSDKResponsesWrapper(
+                wrapper = self._GeminiSDKResponsesWrapper(
                     output_text=text,
                     output=output_list,
                     usage=usage_dict,
@@ -2417,7 +2421,7 @@ class LLMAdapter:
                     )
                     for chunk in resp_stream:
                         try:
-                            txt = _extract_native_text(chunk)
+                            txt = self._extract_native_text(chunk)
                             if txt:
                                 yield AdapterEvent("response.output_text.delta", delta=txt)
                         except Exception:
