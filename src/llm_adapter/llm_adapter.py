@@ -279,6 +279,7 @@ class LLMAdapter:
         adapter_status: Optional[str] = None
         adapter_finish_reason: Optional[str] = None
         adapter_metadata: Optional[Dict[str, Any]] = None
+        adapter_tool_calls: Optional[List[Dict[str, Any]]] = None
         raw_resp: Any = resp
         if isinstance(resp, AdapterResponse):
             try:
@@ -310,6 +311,11 @@ class LLMAdapter:
                     adapter_metadata = dict(resp.metadata)
             except Exception:
                 adapter_metadata = None
+            try:
+                if isinstance(resp.tool_calls, list):
+                    adapter_tool_calls = list(resp.tool_calls)
+            except Exception:
+                adapter_tool_calls = None
 
         # Use raw_resp for any provider-native parsing below.
         resp = raw_resp
@@ -699,37 +705,46 @@ class LLMAdapter:
                     after = best_text[end + len(end_tag) :].strip()
                     if inner and isinstance(inner, str):
                         reasoning_text = inner.strip()
-                    if after:
-                        best_text = after
+                    # Keep best_text intact; do not strip thoughts from displayed text.
         except Exception:
             pass
 
         tool_calls: list[LLMAdapter.LLMToolCall] = []
-        try:
-            output = _safe_get(resp, "output")
-            if isinstance(output, list):
-                for item in output:
-                    it_type = _safe_get(item, "type")
-                    if it_type in ("function_call", "tool_use", "tool_call"):
-                        name = _safe_get(item, "name")
-                        args = _safe_get(item, "arguments")
-                        cid = _safe_get(item, "call_id") or _safe_get(item, "id")
-                        if isinstance(name, str) and name:
-                            tool_calls.append({"name": name, "args": args, "id": cid})
-                        continue
+        if adapter_tool_calls is not None:
+            try:
+                tool_calls = [
+                    {"name": tc.get("name"), "args": tc.get("args"), "id": tc.get("id")}
+                    for tc in adapter_tool_calls
+                    if isinstance(tc, dict) and isinstance(tc.get("name"), str) and tc.get("name")
+                ]
+            except Exception:
+                tool_calls = []
+        if not tool_calls:
+            try:
+                output = _safe_get(resp, "output")
+                if isinstance(output, list):
+                    for item in output:
+                        it_type = _safe_get(item, "type")
+                        if it_type in ("function_call", "tool_use", "tool_call"):
+                            name = _safe_get(item, "name")
+                            args = _safe_get(item, "arguments")
+                            cid = _safe_get(item, "call_id") or _safe_get(item, "id")
+                            if isinstance(name, str) and name:
+                                tool_calls.append({"name": name, "args": args, "id": cid})
+                            continue
 
-                    content = _safe_get(item, "content")
-                    if isinstance(content, list):
-                        for c in content:
-                            c_type = _safe_get(c, "type")
-                            if c_type == "tool_call":
-                                name = _safe_get(c, "name")
-                                args = _safe_get(c, "arguments")
-                                cid = _safe_get(c, "id")
-                                if isinstance(name, str) and name:
-                                    tool_calls.append({"name": name, "args": args, "id": cid})
-        except Exception:
-            pass
+                        content = _safe_get(item, "content")
+                        if isinstance(content, list):
+                            for c in content:
+                                c_type = _safe_get(c, "type")
+                                if c_type == "tool_call":
+                                    name = _safe_get(c, "name")
+                                    args = _safe_get(c, "arguments")
+                                    cid = _safe_get(c, "id")
+                                    if isinstance(name, str) and name:
+                                        tool_calls.append({"name": name, "args": args, "id": cid})
+            except Exception:
+                pass
 
         try:
             if not tool_calls:
@@ -1322,6 +1337,45 @@ class LLMAdapter:
             return []
         return tool_calls
 
+    def _extract_responses_tool_calls(self, resp: Any) -> List[Dict[str, Any]]:
+        tool_calls: List[Dict[str, Any]] = []
+
+        def _safe_get(obj: Any, name: str) -> Any:
+            try:
+                if isinstance(obj, dict):
+                    return obj.get(name)
+                return getattr(obj, name, None)
+            except Exception:
+                return None
+
+        try:
+            output = _safe_get(resp, "output")
+            if isinstance(output, list):
+                for item in output:
+                    it_type = _safe_get(item, "type")
+                    if it_type in ("function_call", "tool_use", "tool_call"):
+                        name = _safe_get(item, "name")
+                        args = _safe_get(item, "arguments")
+                        cid = _safe_get(item, "call_id") or _safe_get(item, "id")
+                        if isinstance(name, str) and name:
+                            tool_calls.append({"name": name, "args": args, "id": cid})
+                        continue
+
+                    content = _safe_get(item, "content")
+                    if isinstance(content, list):
+                        for c in content:
+                            c_type = _safe_get(c, "type")
+                            if c_type == "tool_call":
+                                name = _safe_get(c, "name")
+                                args = _safe_get(c, "arguments")
+                                cid = _safe_get(c, "id")
+                                if isinstance(name, str) and name:
+                                    tool_calls.append({"name": name, "args": args, "id": cid})
+        except Exception:
+            return []
+
+        return tool_calls
+
     def _get_model_capabilities(self, model: str) -> Dict[str, Any]:
         try:
             mi = self._lookup_model_info_from_registry(model)
@@ -1821,6 +1875,7 @@ class LLMAdapter:
             model_response=resp,
             status=self._map_completion_status_from_finish_reason(finish_reason),
             finish_reason=finish_reason,
+            tool_calls=tool_calls,
         )
 
     def create(
@@ -2037,7 +2092,7 @@ class LLMAdapter:
                 raw_response=resp,
             )
             print(f"[DEBUG _openai_call Responses] metadata dict for AdapterResponse: {metadata_dict}")
-            
+            tool_calls = self._extract_responses_tool_calls(resp)
             return AdapterResponse(
                 output_text=text,
                 model=resolved_model,
@@ -2047,6 +2102,7 @@ class LLMAdapter:
                 model_response=resp,
                 status=status or ("incomplete" if finish_reason else "completed"),
                 finish_reason=finish_reason,
+                tool_calls=tool_calls,
             )
 
         if endpoint == "chat_completions":
@@ -2076,6 +2132,7 @@ class LLMAdapter:
                     raw_response=resp,
                 )
                 print(f"[DEBUG _openai_call ChatCompletions] metadata dict for AdapterResponse: {metadata_dict}")
+                tool_calls = self._extract_responses_tool_calls(resp)
                 return AdapterResponse(
                     output_text=self._extract_openai_chatcompletion_text(resp),
                     model=resolved_model,
@@ -2085,6 +2142,7 @@ class LLMAdapter:
                     model_response=resp,
                     status=self._map_completion_status_from_finish_reason(finish_reason),
                     finish_reason=finish_reason,
+                    tool_calls=tool_calls,
                 )
 
             def event_gen() -> Iterator[AdapterEvent]:

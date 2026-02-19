@@ -120,6 +120,17 @@ make start
 
 (See **Run the demo FastAPI server + UI** section below for full details.)
 
+### For Developers: Running Tests
+
+If you want to run the test suite:
+
+```bash
+# Install with dev dependencies (includes pytest)
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+```
 
 ## Project structure
 
