@@ -66,6 +66,7 @@ class AdapterResponse:
         model_response: Any | None = None,
         status: Optional[str] = None,
         finish_reason: Optional[str] = None,
+        tool_calls: Optional[List[Dict[str, Any]]] = None,
     ):
         self.output_text = output_text
         self.model = model
@@ -77,6 +78,7 @@ class AdapterResponse:
 
         self.status = status
         self.finish_reason = finish_reason
+        self.tool_calls = tool_calls or []
 
 
 class AdapterEvent:
@@ -1197,6 +1199,28 @@ class LLMAdapter:
             return None
         return None
 
+    def _extract_chatcompletion_tool_calls(self, resp: Any) -> List[Dict[str, Any]]:
+        tool_calls: List[Dict[str, Any]] = []
+        try:
+            choices = getattr(resp, "choices", None)
+            if isinstance(choices, list) and choices:
+                msg = getattr(choices[0], "message", None)
+                tc_list = getattr(msg, "tool_calls", None)
+                if isinstance(tc_list, list):
+                    for t in tc_list:
+                        t_type = t.get("type") if isinstance(t, dict) else getattr(t, "type", None)
+                        if t_type not in ("function", "tool_call"):
+                            continue
+                        func = (t.get("function") if isinstance(t, dict) else getattr(t, "function", None)) or t
+                        name = func.get("name") if isinstance(func, dict) else getattr(func, "name", None)
+                        args = func.get("arguments") if isinstance(func, dict) else getattr(func, "arguments", None)
+                        cid = t.get("id") if isinstance(t, dict) else getattr(t, "id", None)
+                        if isinstance(name, str) and name:
+                            tool_calls.append({"name": name, "args": args, "id": cid})
+        except Exception:
+            return []
+        return tool_calls
+
     def _get_model_capabilities(self, model: str) -> Dict[str, Any]:
         try:
             mi = self._lookup_model_info_from_registry(model)
@@ -1660,26 +1684,7 @@ class LLMAdapter:
             text = ""
 
         # Best-effort tool call extraction from chat.completions message.tool_calls
-        tool_calls: list[Dict[str, Any]] = []
-        try:
-            choices = _safe_get(resp, "choices")
-            if isinstance(choices, list) and choices:
-                c0 = choices[0]
-                msg = _safe_get(c0, "message")
-                tc_list = _safe_get(msg, "tool_calls")
-                if isinstance(tc_list, list):
-                    for t in tc_list:
-                        t_type = _safe_get(t, "type")
-                        if t_type not in ("function", "tool_call"):
-                            continue
-                        func = _safe_get(t, "function") or t
-                        name = _safe_get(func, "name")
-                        args = _safe_get(func, "arguments")
-                        cid = _safe_get(t, "id")
-                        if isinstance(name, str) and name:
-                            tool_calls.append({"name": name, "arguments": args, "id": cid, "type": "tool_call"})
-        except Exception:
-            tool_calls = []
+        tool_calls = self._extract_chatcompletion_tool_calls(resp)
 
         # Build a minimal Responses-style output list
         output_list: list[Dict[str, Any]] = [
@@ -1931,6 +1936,7 @@ class LLMAdapter:
                 raw_response=resp,
             )
             print(f"[DEBUG _openai_call Responses] metadata dict for AdapterResponse: {metadata_dict}")
+            
             return AdapterResponse(
                 output_text=text,
                 model=resolved_model,
