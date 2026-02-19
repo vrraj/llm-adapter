@@ -2175,10 +2175,10 @@ class LLMAdapter:
         endpoint = "chat_completions"
         try:
             model_info = self._lookup_model_info_from_registry(model)
-            if model_info is not None:
-                endpoint = getattr(model_info, "endpoint", "chat_completions") or "chat_completions"
+            if model_info is not None and hasattr(model_info, "endpoint"):
+                endpoint = getattr(model_info, "endpoint")
         except Exception:
-            endpoint = "chat_completions"
+            pass
 
         if endpoint == "gemini_sdk":
             client = self._get_gemini_native()
@@ -2187,9 +2187,7 @@ class LLMAdapter:
 
         if endpoint == "gemini_sdk":
             native_client = client
-
-            
-            
+  
             # Build contents + config for google-genai.
             # Start from already-prepared kwargs so canonical token handling and thinking config stay consistent.
             sdk_kwargs: Dict[str, Any] = dict(working_kwargs or {}) if isinstance(working_kwargs, dict) else {}
@@ -2438,26 +2436,26 @@ class LLMAdapter:
                     ) from e
 
             return event_gen()
+        if endpoint == "chat_completions":
+            if "tools" in working_kwargs:
+                try:
+                    working_kwargs["tools"] = self._sanitize_tools_for_gemini_adapter(working_kwargs["tools"])
+                except Exception:
+                    pass
 
-        if "tools" in working_kwargs:
-            try:
-                working_kwargs["tools"] = self._sanitize_tools_for_gemini_adapter(working_kwargs["tools"])
-            except Exception:
-                pass
+            if mot is not None:
+                # Gemini OpenAI-compatible chat.completions uses max_completion_tokens.
+                working_kwargs["max_completion_tokens"] = mot
 
-        if mot is not None:
-            # Gemini OpenAI-compatible chat.completions uses max_completion_tokens.
-            working_kwargs["max_completion_tokens"] = mot
+            messages = input if isinstance(input, list) else [{"role": "user", "content": str(input)}]
+            resp = client.chat.completions.create(model=resolved_model, messages=messages, stream=stream, **working_kwargs)
 
-        messages = input if isinstance(input, list) else [{"role": "user", "content": str(input)}]
-        resp = client.chat.completions.create(model=resolved_model, messages=messages, stream=stream, **working_kwargs)
+            # For non-streaming calls, wrap Gemini chat.completions into a minimal Responses-like shim
+            # so callers can consistently access output_text/output/usage across providers.
+            if not stream:
+                return self._wrap_gemini_chatcompletion_as_responses(resp, model_key=model, resolved_model=resolved_model)
 
-        # For non-streaming calls, wrap Gemini chat.completions into a minimal Responses-like shim
-        # so callers can consistently access output_text/output/usage across providers.
-        if not stream:
-            return self._wrap_gemini_chatcompletion_as_responses(resp, model_key=model, resolved_model=resolved_model)
-
-        return resp
+            return resp
 
     def _gemini_embedding_call(self, *, model: str, input: Any, **kwargs: Any):
         """Gemini embedding call via the OpenAI-compatible adapter client."""
