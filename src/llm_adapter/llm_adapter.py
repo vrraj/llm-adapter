@@ -2132,7 +2132,7 @@ class LLMAdapter:
                     raw_response=resp,
                 )
                 print(f"[DEBUG _openai_call ChatCompletions] metadata dict for AdapterResponse: {metadata_dict}")
-                tool_calls = self._extract_responses_tool_calls(resp)
+                tool_calls = self._extract_chatcompletion_tool_calls(resp)
                 return AdapterResponse(
                     output_text=self._extract_openai_chatcompletion_text(resp),
                     model=resolved_model,
