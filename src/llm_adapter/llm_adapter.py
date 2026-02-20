@@ -271,9 +271,167 @@ class LLMAdapter:
     ) -> LLMResult:
         """Build a normalized LLMResult from a non-streaming response."""
 
-        # If caller passed an AdapterResponse (from this adapter), prefer its already-derived
-        # fields (output_text/usage/status/finish_reason/metadata) and only fall back to
-        # provider-native parsing when missing.
+        # Fast-path: if caller passed an AdapterResponse from this adapter, do not re-parse
+        # provider-native responses here (prevents drift). Only do lightweight normalization.
+        if isinstance(resp, AdapterResponse):
+            ar = resp
+            meta: Dict[str, Any] = ar.metadata if isinstance(ar.metadata, dict) else {}
+
+            provider_norm = str(meta.get("provider") or (provider or "")).strip().lower() or "openai"
+
+            # Prefer adapter-resolved model name.
+            try:
+                model = str(ar.model or "").strip()
+            except Exception:
+                model = ""
+
+            rid = meta.get("provider_response_id")
+            created_at = meta.get("provider_created_at")
+
+            # Fallbacks (best-effort) if metadata is missing.
+            if rid is None:
+                try:
+                    rid = getattr(ar.model_response, "id", None)
+                except Exception:
+                    rid = None
+            if created_at is None:
+                try:
+                    created_at = getattr(ar.model_response, "created_at", None)
+                except Exception:
+                    created_at = None
+                if created_at is None:
+                    try:
+                        created_at = getattr(ar.model_response, "created", None)
+                    except Exception:
+                        created_at = None
+
+            status = None
+            try:
+                if isinstance(ar.status, str) and ar.status:
+                    status = ar.status
+            except Exception:
+                status = None
+            if not status:
+                status = "completed"
+
+            finish_reason = None
+            try:
+                if isinstance(ar.finish_reason, str) and ar.finish_reason:
+                    finish_reason = ar.finish_reason
+            except Exception:
+                finish_reason = None
+
+            # Usage: prefer AdapterResponse.usage; normalize into LLMUsage.
+            usage: LLMAdapter.LLMUsage = {
+                "input_tokens": 0,
+                "cached_tokens": 0,
+                "output_tokens": 0,
+                "reasoning_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+            }
+
+            def _apply_adapter_usage(u: Dict[str, Any]) -> None:
+                try:
+                    it = u.get("input_tokens")
+                    ot = u.get("output_tokens")
+                    tt = u.get("total_tokens")
+                    pt = u.get("prompt_tokens")
+                    ct = u.get("completion_tokens")
+                    cached = u.get("cached_tokens")
+                    rtok = u.get("reasoning_tokens")
+
+                    if it is None and pt is not None:
+                        it = pt
+                    if ot is None and ct is not None:
+                        ot = ct
+                    if tt is None:
+                        try:
+                            tt = (int(it or 0) + int(ot or 0))
+                        except Exception:
+                            tt = 0
+
+                    usage["input_tokens"] = int(it or 0)
+                    usage["output_tokens"] = int(ot or 0)
+                    usage["total_tokens"] = int(tt or 0)
+                    usage["cached_tokens"] = int(cached or 0)
+                    usage["reasoning_tokens"] = int(rtok or 0)
+
+                    try:
+                        usage["completion_tokens"] = max(int(usage["output_tokens"]) - int(usage["reasoning_tokens"]), 0)
+                    except Exception:
+                        usage["completion_tokens"] = int(ot or 0)
+                except Exception:
+                    pass
+
+            try:
+                if isinstance(ar.usage, dict) and ar.usage:
+                    _apply_adapter_usage(dict(ar.usage))
+            except Exception:
+                pass
+
+            # Text + reasoning extraction and stripping thought block from output.
+            try:
+                best_text = (ar.output_text or "").strip()
+            except Exception:
+                best_text = ""
+
+            reasoning_text = None
+            answer_text = best_text
+            try:
+                if isinstance(best_text, str):
+                    start_tag = "<thought>"
+                    end_tag = "</thought>"
+                    start = best_text.find(start_tag)
+                    end = best_text.find(end_tag)
+                    if start != -1 and end != -1 and end > start:
+                        inner = best_text[start + len(start_tag) : end]
+                        if inner and isinstance(inner, str):
+                            reasoning_text = inner.strip()
+                        # Strip the thought block from displayed text; keep only answer after </thought>
+                        answer_text = best_text[end + len(end_tag) :].strip()
+            except Exception:
+                pass
+
+            if not isinstance(answer_text, str):
+                answer_text = best_text
+
+            # Tool calls: take directly from AdapterResponse.tool_calls (already normalized).
+            tool_calls: list[LLMAdapter.LLMToolCall] = []
+            try:
+                if isinstance(ar.tool_calls, list):
+                    tool_calls = [
+                        {"name": tc.get("name"), "args": tc.get("args"), "id": tc.get("id")}
+                        for tc in ar.tool_calls
+                        if isinstance(tc, dict) and isinstance(tc.get("name"), str) and tc.get("name")
+                    ]
+            except Exception:
+                tool_calls = []
+
+            raw_out: Any = None
+            try:
+                raw_out = ar.model_response or ar.adapter_response
+            except Exception:
+                raw_out = ar
+
+            return {
+                "provider": provider_norm,
+                "model": model,
+                "id": rid,
+                "created_at": created_at,
+                "text": answer_text or "",
+                "reasoning": reasoning_text,
+                "role": "assistant",
+                "status": str(status),
+                "finish_reason": finish_reason,
+                "metadata": meta if meta else None,
+                "usage": usage,
+                "tool_calls": tool_calls,
+                "raw": raw_out,
+            }
+
+        # Legacy/raw-response path: keep provider-native parsing only for callers that did not
+        # pass an AdapterResponse.
         adapter_usage: Optional[Dict[str, int]] = None
         adapter_output_text: Optional[str] = None
         adapter_status: Optional[str] = None
@@ -281,44 +439,6 @@ class LLMAdapter:
         adapter_metadata: Optional[Dict[str, Any]] = None
         adapter_tool_calls: Optional[List[Dict[str, Any]]] = None
         raw_resp: Any = resp
-        if isinstance(resp, AdapterResponse):
-            try:
-                raw_resp = resp.model_response or resp.adapter_response or resp
-            except Exception:
-                raw_resp = resp
-            try:
-                if isinstance(resp.usage, dict) and resp.usage:
-                    adapter_usage = dict(resp.usage)
-            except Exception:
-                adapter_usage = None
-            try:
-                if isinstance(resp.output_text, str) and resp.output_text.strip():
-                    adapter_output_text = resp.output_text.strip()
-            except Exception:
-                adapter_output_text = None
-            try:
-                if isinstance(resp.status, str) and resp.status:
-                    adapter_status = resp.status
-            except Exception:
-                adapter_status = None
-            try:
-                if isinstance(resp.finish_reason, str) and resp.finish_reason:
-                    adapter_finish_reason = resp.finish_reason
-            except Exception:
-                adapter_finish_reason = None
-            try:
-                if isinstance(resp.metadata, dict) and resp.metadata:
-                    adapter_metadata = dict(resp.metadata)
-            except Exception:
-                adapter_metadata = None
-            try:
-                if isinstance(resp.tool_calls, list):
-                    adapter_tool_calls = list(resp.tool_calls)
-            except Exception:
-                adapter_tool_calls = None
-
-        # Use raw_resp for any provider-native parsing below.
-        resp = raw_resp
 
         # Provider inference (optional): callers may pass provider and/or model_key.
         # If provider is not provided, infer it from:
@@ -1376,6 +1496,77 @@ class LLMAdapter:
 
         return tool_calls
 
+    def _extract_gemini_sdk_tool_calls(self, resp: Any) -> List[Dict[str, Any]]:
+        """Extract tool/function calls from Gemini *native* SDK responses (google-genai).
+
+        Expected common shape (Gemini 3 SDK):
+          resp.candidates[0].content.parts = [
+            {"text": "..."},
+            {"function_call": {"name": "...", "args": {...}}},
+            ...
+          ]
+
+        Returns canonical list items: {"name": <str>, "args": <any>, "id": <optional str>}.
+        """
+        tool_calls: List[Dict[str, Any]] = []
+
+        # Unwrap AdapterResponse if caller passed it
+        raw = resp
+        try:
+            if isinstance(resp, AdapterResponse):
+                raw = resp.model_response or resp.adapter_response or resp
+        except Exception:
+            raw = resp
+
+        try:
+            candidates = getattr(raw, "candidates", None)
+            if not isinstance(candidates, list) or not candidates:
+                return []
+
+            cand0 = candidates[0]
+            content = getattr(cand0, "content", None)
+            parts = getattr(content, "parts", None) if content is not None else None
+            if not isinstance(parts, list) or not parts:
+                return []
+
+            for p in parts:
+                # Most common: parts are dicts
+                if isinstance(p, dict):
+                    fc = p.get("function_call") or p.get("functionCall")
+                    if isinstance(fc, dict):
+                        name = fc.get("name")
+                        args = fc.get("args") if "args" in fc else fc.get("arguments")
+                        cid = p.get("id") or p.get("call_id") or p.get("callId")
+                        if isinstance(name, str) and name:
+                            tool_calls.append({"name": name, "args": args, "id": cid})
+                    continue
+
+                # Fallback: Part objects
+                fc = getattr(p, "function_call", None)
+                if fc is None:
+                    fc = getattr(p, "functionCall", None)
+                if fc is None:
+                    continue
+
+                name = getattr(fc, "name", None)
+                args = getattr(fc, "args", None)
+                if args is None:
+                    args = getattr(fc, "arguments", None)
+
+                cid = getattr(p, "id", None)
+                if cid is None:
+                    cid = getattr(p, "call_id", None)
+                if cid is None:
+                    cid = getattr(p, "callId", None)
+
+                if isinstance(name, str) and name:
+                    tool_calls.append({"name": name, "args": args, "id": cid})
+
+        except Exception:
+            return []
+
+        return tool_calls
+    
     def _get_model_capabilities(self, model: str) -> Dict[str, Any]:
         try:
             mi = self._lookup_model_info_from_registry(model)
@@ -1855,7 +2046,7 @@ class LLMAdapter:
 
         # Best-effort usage mapping to Responses-style keys
         usage_dict = self._extract_gemini_response_usage(resp, "chat_completions")
-        print(f"[DEBUG _wrap_gemini_chatcompletion_as_responses] usage dict: {usage_dict}")
+        #print(f"[DEBUG _wrap_gemini_chatcompletion_as_responses] usage dict: {usage_dict}")
         metadata_dict = self._assemble_adapter_response_metadata(
             provider="gemini",
             model_key=model_key,
@@ -2457,6 +2648,7 @@ class LLMAdapter:
                     endpoint=endpoint, #gemini_sdk
                     raw_response=resp,
                 )
+                tool_calls = self._extract_gemini_sdk_tool_calls(resp)
                 return AdapterResponse(
                     output_text=text,
                     model=resolved_model,
@@ -2466,6 +2658,7 @@ class LLMAdapter:
                     model_response=resp,
                     status=self._map_gemini_native_status_from_finish_reason(finish_reason),
                     finish_reason=finish_reason,
+                    tool_calls=tool_calls,
                 )
 
             def event_gen() -> Iterator[AdapterEvent]:
