@@ -765,7 +765,6 @@ class LLMAdapter:
                 out_details = getattr(u, "output_tokens_details", None)
                 if out_details is not None:
                     reasoning = getattr(out_details, "reasoning_tokens", None)
-                    print(f"[DEBUG _extract_openai_response_usage] reasoning: {reasoning}")
 
                 # Canonical + legacy keys, always present if usage exists
                 if it is not None or ot is not None or tt is not None:
@@ -803,13 +802,11 @@ class LLMAdapter:
             try:
                 u = getattr(resp, "usage", None)
                 if u is None:
-                    print(f"[DEBUG _extract_openai_response_usage] chatcompletion - usage object is None")
                     return None
-                print(f"[DEBUG _extract_openai_response_usage] chatcompletion - usage object: {u}")
                 pt = getattr(u, "prompt_tokens", None)
                 ct = getattr(u, "completion_tokens", None)
                 tt2 = getattr(u, "total_tokens", None)
-                print(f"[DEBUG _extract_openai_response_usage] chatcompletion - pt: {pt}, ct: {ct}, tt2: {tt2}")
+                
                 # Extract cached_content_tokens from prompt_tokens_details if present
                 cached_details = getattr(u, "prompt_tokens_details", None)
                 cc = None
@@ -861,14 +858,11 @@ class LLMAdapter:
             try:
                 u = getattr(resp, "usage", None)
                 if u is None:
-                    print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - usage object is None")
                     return None
-                print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - usage object: {u}")
-                print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - usage type: {type(u)}")
                 pt = u.get("prompt_tokens") if isinstance(u, dict) else getattr(u, "prompt_tokens", None)
                 ct = u.get("completion_tokens") if isinstance(u, dict) else getattr(u, "completion_tokens", None)
                 tt = u.get("total_tokens") if isinstance(u, dict) else getattr(u, "total_tokens", None)
-                print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - extracted pt: {pt}, ct: {ct}, tt: {tt}")
+                
 
                 # Extract cached_content_tokens from prompt_tokens_details if present
                 cached_details = getattr(u, "prompt_tokens_details", None)
@@ -924,7 +918,7 @@ class LLMAdapter:
         elif endpoint == self.ENDPOINT_GEMINI_SDK:
             # Gemini native SDK response (google-genai).
             try:
-                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - endpoint: {endpoint} - resp type: {type(resp)}")
+                
 
                 # Unwrap AdapterResponse if caller passed it
                 raw = resp
@@ -947,12 +941,7 @@ class LLMAdapter:
                         um = getattr(raw, "usageMetadata", None)
 
                 if um is None:
-                    print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - usage metadata object is None")
-                    print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - raw type: {type(raw)}")
                     return None
-
-                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - raw type: {type(raw)}")
-                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - usage metadata type: {type(um)}")
 
                 def _um_get(name_snake: str, name_camel: str) -> Any:
                     if um is None:
@@ -971,8 +960,7 @@ class LLMAdapter:
                 reasoning = _um_get("thoughts_token_count", "thoughtsTokenCount")
                 cc = _um_get("cached_content_token_count", "cachedContentTokenCount")
 
-                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - extracted pt: {pt}, ct: {ct}, tt: {tt}")
-                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - extracted cc: {cc}, reasoning: {reasoning}")
+                
 
                 # --- PATCHED BLOCK START ---
                 # Prefer native SDK fields directly when available.
@@ -1012,7 +1000,6 @@ class LLMAdapter:
                 return usage_dict
                 # --- PATCHED BLOCK END ---
             except Exception as e:
-                print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - exception: {e}")
                 return None
                 
         return None
@@ -1644,7 +1631,7 @@ class LLMAdapter:
             endpoint=self.ENDPOINT_CHAT_COMPLETIONS,
             raw_response=resp,
         )
-        print(f"[DEBUG _wrap_gemini_chatcompletion_as_responses] metadata dict: {metadata_dict}")
+        
         # Wrap as AdapterResponse (Responses-like shim)
         finish_reason = self._extract_finish_reason(resp)
         return AdapterResponse(
@@ -1864,7 +1851,7 @@ class LLMAdapter:
                     status = "completed"
 
             usage_dict = self._extract_openai_response_usage(resp, endpoint)
-            print(f"[DEBUG _openai_call Responses] usage dict for AdapterResponse: {usage_dict}")
+            
             metadata_dict = self._assemble_adapter_response_metadata(
                 provider="openai",
                 model_key=model,
@@ -1872,7 +1859,7 @@ class LLMAdapter:
                 endpoint=endpoint,
                 raw_response=resp,
             )
-            print(f"[DEBUG _openai_call Responses] metadata dict for AdapterResponse: {metadata_dict}")
+            
             tool_calls = self._extract_responses_tool_calls(resp)
             return AdapterResponse(
                 output_text=text,
@@ -1904,7 +1891,7 @@ class LLMAdapter:
                 )
                 finish_reason = self._extract_openai_chatcompletion_finish_reason(resp)
                 usage_dict = self._extract_openai_response_usage(resp, endpoint)
-                print(f"[DEBUG _openai_call ChatCompletions] usage dict for AdapterResponse: {usage_dict}")
+                
                 metadata_dict = self._assemble_adapter_response_metadata(
                     provider="openai",
                     model_key=model,
@@ -1912,7 +1899,7 @@ class LLMAdapter:
                     endpoint=endpoint,
                     raw_response=resp,
                 )
-                print(f"[DEBUG _openai_call ChatCompletions] metadata dict for AdapterResponse: {metadata_dict}")
+                
                 tool_calls = self._extract_chatcompletion_tool_calls(resp)
                 return AdapterResponse(
                     output_text=self._extract_openai_chatcompletion_text(resp),
