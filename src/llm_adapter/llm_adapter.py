@@ -129,6 +129,20 @@ class EmbeddingUsage:
 
 
 class LLMAdapter:
+    ENDPOINT_RESPONSES = "responses"
+    ENDPOINT_CHAT_COMPLETIONS = "chat_completions"
+    ENDPOINT_GEMINI_SDK = "gemini_sdk"
+
+    def _safe_get(self, obj: Any, name: str) -> Any:
+        """Safely read an attribute/key from either an object or dict."""
+        try:
+            if obj is None:
+                return None
+            if isinstance(obj, dict):
+                return obj.get(name)
+            return getattr(obj, name, None)
+        except Exception:
+            return None
     """Unified LLM interface supporting multiple providers."""
 
     def __init__(
@@ -232,33 +246,58 @@ class LLMAdapter:
     # ----------------------------
     # Pricing helpers (registry-driven)
     # ----------------------------
-    def get_pricing_for_model_key(self, model_key: str) -> Optional[Dict[str, Any]]:
-        """Return pricing metadata for a registry model key, if present.
-
-        This adapter does not compute costs; it only exposes any pricing metadata
-        stored in the model registry (if you choose to include it there).
-        """
-        try:
-            if not model_key:
-                return None
-            mi = self.model_registry.get(model_key)
-            if mi is None:
-                return None
-            pricing = getattr(mi, "pricing", None)
-            return pricing if isinstance(pricing, dict) else None
-        except Exception:
-            return None
-
     def get_pricing_for_model(self, model: str) -> Optional[Dict[str, Any]]:
-        """Return pricing metadata for a provider model name, if present in registry."""
+        """Return pricing metadata for a model identifier, if present in registry.
+
+        Accepts either:
+        - a registry model key (direct dict key), or
+        - a provider-native model name (matched against candidate.model).
+        """
         try:
             if not model:
                 return None
+
+            # Lookup supports both registry keys and provider-native model names.
             mi = self._lookup_model_info_from_registry(model)
+
             if mi is None:
                 return None
             pricing = getattr(mi, "pricing", None)
-            return pricing if isinstance(pricing, dict) else None
+            if pricing is None:
+                return None
+
+            # If registry stores pricing as a dict, return it directly.
+            if isinstance(pricing, dict):
+                return pricing
+
+            # If registry stores pricing as a typed object (e.g., Pricing dataclass), convert to dict.
+            try:
+                # dataclasses.asdict support
+                import dataclasses
+                if dataclasses.is_dataclass(pricing):
+                    as_d = dataclasses.asdict(pricing)
+                    return as_d if isinstance(as_d, dict) else None
+            except Exception:
+                pass
+
+            # Common case: simple object with attributes
+            try:
+                d = dict(getattr(pricing, "__dict__", {}) or {})
+                if d:
+                    return d
+            except Exception:
+                pass
+
+            # Optional: support a to_dict() method if provided
+            try:
+                to_d = getattr(pricing, "to_dict", None)
+                if callable(to_d):
+                    out = to_d()
+                    return out if isinstance(out, dict) else None
+            except Exception:
+                pass
+
+            return None
         except Exception:
             return None
 
@@ -321,7 +360,7 @@ class LLMAdapter:
             except Exception:
                 finish_reason = None
 
-            # Usage: prefer AdapterResponse.usage; normalize into LLMUsage.
+            # Usage: AdapterResponse.usage is canonicalized at source (provider wrappers).
             usage: LLMAdapter.LLMUsage = {
                 "input_tokens": 0,
                 "cached_tokens": 0,
@@ -331,42 +370,30 @@ class LLMAdapter:
                 "total_tokens": 0,
             }
 
-            def _apply_adapter_usage(u: Dict[str, Any]) -> None:
-                try:
+            try:
+                u = ar.usage if isinstance(ar.usage, dict) else None
+                if isinstance(u, dict) and u:
                     it = u.get("input_tokens")
                     ot = u.get("output_tokens")
+                    rt = u.get("reasoning_tokens")
+                    ct = u.get("cached_tokens")
                     tt = u.get("total_tokens")
-                    pt = u.get("prompt_tokens")
-                    ct = u.get("completion_tokens")
-                    cached = u.get("cached_tokens")
-                    rtok = u.get("reasoning_tokens")
-
-                    if it is None and pt is not None:
-                        it = pt
-                    if ot is None and ct is not None:
-                        ot = ct
-                    if tt is None:
-                        try:
-                            tt = (int(it or 0) + int(ot or 0))
-                        except Exception:
-                            tt = 0
 
                     usage["input_tokens"] = int(it or 0)
                     usage["output_tokens"] = int(ot or 0)
-                    usage["total_tokens"] = int(tt or 0)
-                    usage["cached_tokens"] = int(cached or 0)
-                    usage["reasoning_tokens"] = int(rtok or 0)
+                    usage["reasoning_tokens"] = int(rt or 0)
+                    usage["cached_tokens"] = int(ct or 0)
 
+                    if tt is None:
+                        usage["total_tokens"] = int(usage["input_tokens"] + usage["output_tokens"])
+                    else:
+                        usage["total_tokens"] = int(tt or 0)
+
+                    # Visible completion tokens (answer-only) = output - reasoning (clamped)
                     try:
                         usage["completion_tokens"] = max(int(usage["output_tokens"]) - int(usage["reasoning_tokens"]), 0)
                     except Exception:
-                        usage["completion_tokens"] = int(ot or 0)
-                except Exception:
-                    pass
-
-            try:
-                if isinstance(ar.usage, dict) and ar.usage:
-                    _apply_adapter_usage(dict(ar.usage))
+                        usage["completion_tokens"] = int(usage["output_tokens"])
             except Exception:
                 pass
 
@@ -704,7 +731,7 @@ class LLMAdapter:
         if created is None:
             created = _safe_get_nested(raw, "created")
 
-        if created is None and str(provider).lower() == "gemini" and str(endpoint or "").lower() == "gemini_sdk":
+        if created is None and str(provider).lower() == "gemini" and str(endpoint or "").lower() == self.ENDPOINT_GEMINI_SDK:
             import time
             created = int(time.time())
 
@@ -724,7 +751,7 @@ class LLMAdapter:
         return meta
 
     def _extract_openai_response_usage(self, resp: Any, endpoint: str) -> Optional[Dict[str, int]]:
-        if endpoint == "responses":
+        if endpoint == self.ENDPOINT_RESPONSES:
             try:
                 u = getattr(resp, "usage", None)
                 if u is None:
@@ -736,25 +763,43 @@ class LLMAdapter:
 
                 # Extract reasoning_tokens from output_tokens_details if present
                 out_details = getattr(u, "output_tokens_details", None)
-    
                 if out_details is not None:
                     reasoning = getattr(out_details, "reasoning_tokens", None)
                     print(f"[DEBUG _extract_openai_response_usage] reasoning: {reasoning}")
+
+                # Canonical + legacy keys, always present if usage exists
                 if it is not None or ot is not None or tt is not None:
-                    out: Dict[str, int] = {}
-                    if it is not None:
-                        out["input_tokens"] = int(it or 0)
-                    if ot is not None:
-                        out["output_tokens"] = int(ot or 0)
-                    if tt is not None:
-                        out["total_tokens"] = int(tt or ((it or 0) + (ot or 0)))
-                    if reasoning is not None:
-                        out["reasoning_tokens"] = int(reasoning or 0)
-                    print(f"[DEBUG _extract_openai_response_usage] final out dict: {out}")
-                    return out
+                    # --- PATCHED BLOCK START ---
+                    if it is not None or ot is not None or tt is not None:
+                        in_i = int(it or 0)
+                        out_i = int(ot or 0)
+                        reason_i = int(reasoning or 0) if reasoning is not None else 0
+                        total_i = int(tt or (in_i + out_i))
+                        cached_i = 0
+                        try:
+                            in_details = getattr(u, "input_tokens_details", None)
+                            if in_details is not None:
+                                cached_i = int(getattr(in_details, "cached_tokens", 0) or 0)
+                        except Exception:
+                            cached_i = 0
+
+                        out: Dict[str, int] = {
+                            # Canonical keys
+                            "input_tokens": in_i,
+                            "output_tokens": out_i,
+                            "total_tokens": total_i,
+                            "cached_tokens": cached_i,
+                            "reasoning_tokens": reason_i,
+                            # Legacy aliases (keep for backward-compat)
+                            "prompt_tokens": in_i,
+                            "completion_tokens": out_i,
+                        }
+                        return out
+                    # --- PATCHED BLOCK END ---
             except Exception:
                 return None
-        elif endpoint == "chat_completions":
+
+        elif endpoint == self.ENDPOINT_CHAT_COMPLETIONS:
             try:
                 u = getattr(resp, "usage", None)
                 if u is None:
@@ -765,30 +810,43 @@ class LLMAdapter:
                 ct = getattr(u, "completion_tokens", None)
                 tt2 = getattr(u, "total_tokens", None)
                 print(f"[DEBUG _extract_openai_response_usage] chatcompletion - pt: {pt}, ct: {ct}, tt2: {tt2}")
-                #Extract cached_content_tokens from prompt_tokens_details if present
+                # Extract cached_content_tokens from prompt_tokens_details if present
                 cached_details = getattr(u, "prompt_tokens_details", None)
                 cc = None
                 if cached_details is not None:
                     cc = getattr(cached_details, "cached_tokens", None)
 
-                reasoning = None
-                
-                if pt is not None or ct is not None or tt2 is not None:
-                    out2 = {
-                        "prompt_tokens": int(pt or 0),
-                        "completion_tokens": int(ct or 0),
-                        "total_tokens": int(tt2 or ((pt or 0) + (ct or 0))),
-                        "cached_tokens": int(cc or 0),
-                    }
-                    # Extract reasoning_tokens from completion_tokens_details if present
+                # --- PATCHED BLOCK START ---
+                # Extract reasoning_tokens from completion_tokens_details if present
+                reasoning = 0
+                try:
                     completion_tokens_details = getattr(u, "completion_tokens_details", None)
-    
                     if completion_tokens_details is not None:
-                        reasoning = getattr(completion_tokens_details, "reasoning_tokens", None)
-                        print(f"[DEBUG _extract_openai_response_usage] reasoning: {reasoning}")
-                    if reasoning is not None:
-                        out2["reasoning_tokens"] = int(reasoning)
+                        r = getattr(completion_tokens_details, "reasoning_tokens", None)
+                        if r is not None:
+                            reasoning = int(r or 0)
+                except Exception:
+                    reasoning = 0
+
+                if pt is not None or ct is not None or tt2 is not None:
+                    in_i = int(pt or 0)
+                    out_i = int(ct or 0)
+                    total_i = int(tt2 or (in_i + out_i))
+                    cached_i = int(cc or 0)
+
+                    out2: Dict[str, int] = {
+                        # Canonical keys
+                        "input_tokens": in_i,
+                        "output_tokens": out_i,
+                        "total_tokens": total_i,
+                        "cached_tokens": cached_i,
+                        "reasoning_tokens": int(reasoning or 0),
+                        # Legacy aliases (keep for backward-compat)
+                        "prompt_tokens": in_i,
+                        "completion_tokens": out_i,
+                    }
                     return out2
+                # --- PATCHED BLOCK END ---
             except Exception:
                 return None
         return None
@@ -797,15 +855,8 @@ class LLMAdapter:
         """Extract usage information from Gemini responses.
         
         Handles both Gemini chat completions (OpenAI-compatible) and Gemini native SDK responses.
-        
-        Args:
-            resp: The response object from Gemini API
-            endpoint: Either "chatcompletion" for OpenAI-compatible or "gemini_sdk" for native SDK
-            
-        Returns:
-            Dictionary with usage metrics or None if not available
         """
-        if endpoint == "chat_completions":
+        if endpoint == self.ENDPOINT_CHAT_COMPLETIONS:
             # Gemini OpenAI-compatible chat completions
             try:
                 u = getattr(resp, "usage", None)
@@ -819,45 +870,59 @@ class LLMAdapter:
                 tt = u.get("total_tokens") if isinstance(u, dict) else getattr(u, "total_tokens", None)
                 print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - extracted pt: {pt}, ct: {ct}, tt: {tt}")
 
-                #Extract cached_content_tokens from prompt_tokens_details if present
+                # Extract cached_content_tokens from prompt_tokens_details if present
                 cached_details = getattr(u, "prompt_tokens_details", None)
                 cc = None
                 if cached_details is not None:
                     cc = getattr(cached_details, "cached_tokens", None)
-                
-                if pt is not None or ct is not None or tt is not None:
-                    print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - condition passed, creating usage_dict")
-                    usage_dict = {
-                        "prompt_tokens": int(pt or 0),
-                        "completion_tokens": int(ct or 0),
-                        "total_tokens": int(tt or ((pt or 0) + (ct or 0))),
-                        "cached_tokens": int(cc or 0),
-                    }
 
-                    # Extract reasoning_tokens from completion_tokens_details if present
-                    reasoning = None
+                # --- PATCHED BLOCK START ---
+                # Extract reasoning_tokens from completion_tokens_details if present
+                reasoning = 0
+                try:
                     completion_tokens_details = getattr(u, "completion_tokens_details", None)
-                    print(f"[DEBUG _extract_gemini_response_usage] chatcompletion - completion_tokens_details: {completion_tokens_details}")
-
                     if completion_tokens_details is not None:
-                        reasoning = getattr(completion_tokens_details, "reasoning_tokens", None)
-                        print(f"[DEBUG _extract_gemini_response_usage] reasoning: {reasoning}")
+                        r = getattr(completion_tokens_details, "reasoning_tokens", None)
+                        if r is not None:
+                            reasoning = int(r or 0)
+                except Exception:
+                    reasoning = 0
 
-                    if reasoning is not None:
-                        usage_dict["reasoning_tokens"] = int(reasoning)
-
+                # Fallback (Gemini OpenAI-compatible nuance): total_tokens may include hidden "thought" tokens
+                # even when completion_tokens_details is null. If total > prompt + completion, treat the delta
+                # as reasoning_tokens.
+                if reasoning == 0 and tt is not None and pt is not None and ct is not None:
                     try:
-                        print(f"[DEBUG _extract_gemini_response_usage] chatcompletion final usage_dict: {usage_dict}")
-                    except Exception as e:
-                        print(f"[DEBUG _extract_gemini_response_usage] print exception: {e}")
-                        print(f"[DEBUG _extract_gemini_response_usage] usage_dict type: {type(usage_dict)}")
+                        delta = int(tt or 0) - int(pt or 0) - int(ct or 0)
+                        if delta > 0:
+                            reasoning = int(delta)
+                    except Exception:
+                        pass
+
+                if pt is not None or ct is not None or tt is not None:
+                    in_i = int(pt or 0)
+                    out_i = int(ct or 0)
+                    total_i = int(tt or (in_i + out_i))
+                    cached_i = int(cc or 0)
+
+                    usage_dict: Dict[str, int] = {
+                        # Canonical keys
+                        "input_tokens": in_i,
+                        "output_tokens": out_i,
+                        "total_tokens": total_i,
+                        "cached_tokens": cached_i,
+                        "reasoning_tokens": int(reasoning or 0),
+                        # Legacy aliases (keep for backward-compat)
+                        "prompt_tokens": in_i,
+                        "completion_tokens": out_i,
+                    }
                     return usage_dict
+                # --- PATCHED BLOCK END ---
             except Exception:
                 return None
                 
-        elif endpoint == "gemini_sdk":
-            # Gemini native SDK response (google-genai). In Python this is typically `resp.usage_metadata`
-            # with snake_case fields: prompt_token_count, candidates_token_count, thoughts_token_count, total_token_count.
+        elif endpoint == self.ENDPOINT_GEMINI_SDK:
+            # Gemini native SDK response (google-genai).
             try:
                 print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - endpoint: {endpoint} - resp type: {type(resp)}")
 
@@ -909,26 +974,43 @@ class LLMAdapter:
                 print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - extracted pt: {pt}, ct: {ct}, tt: {tt}")
                 print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - extracted cc: {cc}, reasoning: {reasoning}")
 
-                if pt is not None or ct is not None or tt is not None:
-                    usage_dict: Dict[str, int] = {
-                        "prompt_tokens": int(pt or 0),
-                        # Visible output tokens only (Gemini calls these candidates tokens)
-                        "completion_tokens": int(ct or 0),
-                        # Total includes prompt + candidates + thoughts
-                        "total_tokens": int(tt or ((pt or 0) + (ct or 0) + (reasoning or 0))),
-                        "reasoning_tokens": int(reasoning or 0),
-                    }
+                # --- PATCHED BLOCK START ---
+                # Prefer native SDK fields directly when available.
+                in_i = int(pt or 0)
+                reason_i = int(reasoning or 0)
 
-                    # Keep a consistent cached token key across the adapter
-                    if cc is not None:
-                        usage_dict["cached_tokens"] = int(cc or 0)
-                        # Back-compat alias (some callers may have expected this)
-                        usage_dict["cached_content_tokens"] = int(cc or 0)
-                    else:
-                        usage_dict["cached_tokens"] = 0
+                out_i = None
+                try:
+                    if ct is not None:
+                        out_i = int(ct or 0)
+                except Exception:
+                    out_i = None
 
-                    print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk final usage_dict: {usage_dict}")
-                    return usage_dict
+                if out_i is None:
+                    # Fallback: derive visible output tokens if candidatesTokenCount missing.
+                    try:
+                        out_i = int((tt or 0) - (pt or 0) - (reasoning or 0))
+                    except Exception:
+                        out_i = 0
+                    if out_i < 0:
+                        out_i = 0
+
+                total_i = int(tt or (in_i + int(out_i or 0) + reason_i))
+
+                usage_dict: Dict[str, int] = {
+                    # Canonical keys
+                    "input_tokens": in_i,
+                    "output_tokens": int(out_i or 0),
+                    "total_tokens": total_i,
+                    "cached_tokens": int(cc or 0),
+                    "reasoning_tokens": reason_i,
+                    # Legacy aliases (keep for backward-compat)
+                    "prompt_tokens": in_i,
+                    "completion_tokens": int(out_i or 0),
+                }
+
+                return usage_dict
+                # --- PATCHED BLOCK END ---
             except Exception as e:
                 print(f"[DEBUG _extract_gemini_response_usage] gemini_sdk - exception: {e}")
                 return None
@@ -983,35 +1065,27 @@ class LLMAdapter:
     def _extract_responses_tool_calls(self, resp: Any) -> List[Dict[str, Any]]:
         tool_calls: List[Dict[str, Any]] = []
 
-        def _safe_get(obj: Any, name: str) -> Any:
-            try:
-                if isinstance(obj, dict):
-                    return obj.get(name)
-                return getattr(obj, name, None)
-            except Exception:
-                return None
-
         try:
-            output = _safe_get(resp, "output")
+            output = self._safe_get(resp, "output")
             if isinstance(output, list):
                 for item in output:
-                    it_type = _safe_get(item, "type")
+                    it_type = self._safe_get(item, "type")
                     if it_type in ("function_call", "tool_use", "tool_call"):
-                        name = _safe_get(item, "name")
-                        args = _safe_get(item, "arguments")
-                        cid = _safe_get(item, "call_id") or _safe_get(item, "id")
+                        name = self._safe_get(item, "name")
+                        args = self._safe_get(item, "arguments")
+                        cid = self._safe_get(item, "call_id") or self._safe_get(item, "id")
                         if isinstance(name, str) and name:
                             tool_calls.append({"name": name, "args": args, "id": cid})
                         continue
 
-                    content = _safe_get(item, "content")
+                    content = self._safe_get(item, "content")
                     if isinstance(content, list):
                         for c in content:
-                            c_type = _safe_get(c, "type")
+                            c_type = self._safe_get(c, "type")
                             if c_type == "tool_call":
-                                name = _safe_get(c, "name")
-                                args = _safe_get(c, "arguments")
-                                cid = _safe_get(c, "id")
+                                name = self._safe_get(c, "name")
+                                args = self._safe_get(c, "arguments")
+                                cid = self._safe_get(c, "id")
                                 if isinstance(name, str) and name:
                                     tool_calls.append({"name": name, "args": args, "id": cid})
         except Exception:
@@ -1531,22 +1605,15 @@ class LLMAdapter:
         - AdapterResponse.usage (best-effort)
         - AdapterResponse.model_response (provider-native response)
         """
-        def _safe_get(obj: Any, name: str) -> Any:
-            try:
-                if isinstance(obj, dict):
-                    return obj.get(name)
-                return getattr(obj, name, None)
-            except Exception:
-                return None
 
         # Best-effort text extraction from chat.completions shape
         text = ""
         try:
-            choices = _safe_get(resp, "choices")
+            choices = self._safe_get(resp, "choices")
             if isinstance(choices, list) and choices:
                 c0 = choices[0]
-                msg = _safe_get(c0, "message")
-                content = _safe_get(msg, "content")
+                msg = self._safe_get(c0, "message")
+                content = self._safe_get(msg, "content")
                 if isinstance(content, str):
                     text = content
         except Exception:
@@ -1568,13 +1635,13 @@ class LLMAdapter:
             output_list[0]["content"].extend(tool_calls)
 
         # Best-effort usage mapping to Responses-style keys
-        usage_dict = self._extract_gemini_response_usage(resp, "chat_completions")
+        usage_dict = self._extract_gemini_response_usage(resp, self.ENDPOINT_CHAT_COMPLETIONS)
         #print(f"[DEBUG _wrap_gemini_chatcompletion_as_responses] usage dict: {usage_dict}")
         metadata_dict = self._assemble_adapter_response_metadata(
             provider="gemini",
             model_key=model_key,
             resolved_model=resolved_model,
-            endpoint="chat_completions",
+            endpoint=self.ENDPOINT_CHAT_COMPLETIONS,
             raw_response=resp,
         )
         print(f"[DEBUG _wrap_gemini_chatcompletion_as_responses] metadata dict: {metadata_dict}")
@@ -1742,15 +1809,15 @@ class LLMAdapter:
         mot = None
         mot = mapped_kwargs.pop("max_output_tokens", None)
 
-        endpoint = "responses"
+        endpoint = self.ENDPOINT_RESPONSES
         try:
             model_info = self._lookup_model_info_from_registry(model)
             if model_info is not None:
                 endpoint = getattr(model_info, "endpoint", None)
             else:
-                endpoint = "chat_completions"
+                endpoint = self.ENDPOINT_CHAT_COMPLETIONS
         except Exception:
-            endpoint = "chat_completions"
+            endpoint = self.ENDPOINT_CHAT_COMPLETIONS
 
         # Map canonical max_output_tokens to the OpenAI field name for this endpoint.
         if mot is not None:
@@ -1758,12 +1825,12 @@ class LLMAdapter:
                 mot_i = int(mot)
             except Exception:
                 mot_i = mot
-            if endpoint == "responses":
+            if endpoint == self.ENDPOINT_RESPONSES:
                 mapped_kwargs["max_output_tokens"] = mot_i
-            elif endpoint == "chat_completions":
+            elif endpoint == self.ENDPOINT_CHAT_COMPLETIONS:
                 mapped_kwargs["max_completion_tokens"] = mot_i
 
-        if endpoint == "responses":
+        if endpoint == self.ENDPOINT_RESPONSES:
             if stream:
                 return client.responses.create(model=resolved_model, input=input, stream=True, **mapped_kwargs)
 
@@ -1819,7 +1886,7 @@ class LLMAdapter:
                 tool_calls=tool_calls,
             )
 
-        if endpoint == "chat_completions":
+        if endpoint == self.ENDPOINT_CHAT_COMPLETIONS:
             if "tools" in mapped_kwargs:
                 try:
                     mapped_kwargs = dict(mapped_kwargs)
@@ -1944,7 +2011,7 @@ class LLMAdapter:
         mot = None
         mot = working_kwargs.pop("max_output_tokens", None)
 
-        endpoint = "chat_completions"
+        endpoint = self.ENDPOINT_CHAT_COMPLETIONS
         try:
             model_info = self._lookup_model_info_from_registry(model)
             if model_info is not None and hasattr(model_info, "endpoint"):
@@ -1952,12 +2019,12 @@ class LLMAdapter:
         except Exception:
             pass
 
-        if endpoint == "gemini_sdk":
+        if endpoint == self.ENDPOINT_GEMINI_SDK:
             client = self._get_gemini_native()
         else:
             client = self._get_gemini()
 
-        if endpoint == "gemini_sdk":
+        if endpoint == self.ENDPOINT_GEMINI_SDK:
             native_client = client
   
             # Build contents + config for google-genai.
@@ -2131,7 +2198,7 @@ class LLMAdapter:
                     ) from e
 
                 text = self._extract_native_text_with_collapsed_thoughts(resp)
-                usage_dict = self._extract_gemini_response_usage(resp, "gemini_sdk")
+                usage_dict = self._extract_gemini_response_usage(resp, self.ENDPOINT_GEMINI_SDK)
                 print(f"[DEBUG _gemini_call Native SDK] usage dict for AdapterResponse: {usage_dict}")
 
                 
@@ -2210,7 +2277,7 @@ class LLMAdapter:
                     ) from e
 
             return event_gen()
-        if endpoint == "chat_completions":
+        if endpoint == self.ENDPOINT_CHAT_COMPLETIONS:
             if "tools" in working_kwargs:
                 try:
                     working_kwargs["tools"] = self._sanitize_tools_for_gemini_adapter(working_kwargs["tools"])
