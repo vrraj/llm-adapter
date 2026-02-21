@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .config import get_model_options, is_provider_enabled
-from llm_adapter import llm_adapter, LLMError
+from .config import get_model_options, is_provider_enabled, CUSTOM_REGISTRY_PATH
+from llm_adapter import llm_adapter, LLMAdapter, LLMError
 
 
 def _ensure_handler_has_api_key(provider: str) -> None:
@@ -29,6 +29,41 @@ def _ensure_handler_has_api_key(provider: str) -> None:
                 llm_adapter._gemini_native = None
 
 
+def _get_adapter(merge_custom_registry: bool = False) -> LLMAdapter:
+    """Get LLMAdapter instance, optionally with custom registry merged."""
+    if not merge_custom_registry:
+        return llm_adapter
+    
+    try:
+        # Import custom registry from configured path
+        import sys
+        
+        # Add examples directory to path
+        examples_dir = CUSTOM_REGISTRY_PATH.parent
+        if str(examples_dir) not in sys.path:
+            sys.path.insert(0, str(examples_dir))
+        
+        # Import the registry module (filename without .py)
+        module_name = CUSTOM_REGISTRY_PATH.stem
+        registry_module = __import__(module_name)
+        USER_REGISTRY = getattr(registry_module, 'REGISTRY')
+        
+        # Create new adapter with merged registry
+        custom_adapter = LLMAdapter(model_registry=USER_REGISTRY)
+        
+        # Copy API keys from default adapter
+        if hasattr(llm_adapter, 'openai_api_key'):
+            custom_adapter.openai_api_key = llm_adapter.openai_api_key
+        if hasattr(llm_adapter, 'gemini_api_key'):
+            custom_adapter.gemini_api_key = llm_adapter.gemini_api_key
+        
+        return custom_adapter
+    except Exception as e:
+        # Fall back to default adapter if custom registry fails
+        print(f"Failed to load custom registry from {CUSTOM_REGISTRY_PATH}: {e}")
+        return llm_adapter
+
+
 class ChatRequest(BaseModel):
     model_key: str
     prompt: str
@@ -37,6 +72,7 @@ class ChatRequest(BaseModel):
     reasoning_effort: Optional[str] = None
     max_output_tokens: Optional[int] = None
     stream: Optional[bool] = None
+    merge_custom_registry: Optional[bool] = False
 
 
 class ChatError(BaseModel):
@@ -64,6 +100,7 @@ class EmbedRequest(BaseModel):
     model_key: str
     text: str
     normalize_embedding: Optional[bool] = None
+    merge_custom_registry: Optional[bool] = False
 
 
 class EmbedResponse(BaseModel):
@@ -90,8 +127,9 @@ app.add_middleware(
 
 
 @app.get("/api/models")
-async def get_models() -> Dict[str, Any]:
-    options = get_model_options()
+async def get_models(merge_custom_registry: bool = False) -> Dict[str, Any]:
+    adapter = _get_adapter(merge_custom_registry)
+    options = get_model_options(adapter)
     for k, v in options.items():
         try:
             prov = str(v.get("provider") or "")
@@ -104,7 +142,10 @@ async def get_models() -> Dict[str, Any]:
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
     model_key = req.model_key.strip()
-    options = get_model_options()
+    
+    # Get adapter with optional custom registry
+    adapter = _get_adapter(req.merge_custom_registry)
+    options = get_model_options(adapter)
     mi = options.get(model_key)
     if not mi:
         raise HTTPException(status_code=400, detail=f"Unknown model_key: {model_key}")
@@ -161,7 +202,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         provider_request = provider_request
 
     try:
-        resp = llm_adapter.create(
+        resp = adapter.create(
             model=model_key,
             input=[{"role": "user", "content": req.prompt}],
             stream=bool(req.stream),
@@ -171,14 +212,14 @@ async def chat(req: ChatRequest) -> ChatResponse:
             max_output_tokens=req.max_output_tokens,
         )
 
-        normalized = llm_adapter.build_llm_result_from_response(resp, provider=provider)
+        normalized = adapter.build_llm_result_from_response(resp, provider=provider)
         return ChatResponse(
             ok=True,
             answer_text=normalized.get("text"),
             reasoning_text=normalized.get("reasoning"),
             raw_usage=normalized.get("usage"),
             provider_response=jsonable_encoder(resp),
-            normalized_result=jsonable_encoder(llm_adapter.build_llm_result_from_response(resp, provider=provider)),
+            normalized_result=jsonable_encoder(adapter.build_llm_result_from_response(resp, provider=provider)),
             provider_request=jsonable_encoder(provider_request),
             format_request=jsonable_encoder(
                 {
@@ -224,7 +265,10 @@ async def chat(req: ChatRequest) -> ChatResponse:
 @app.post("/api/embed", response_model=EmbedResponse)
 async def embed(req: EmbedRequest) -> EmbedResponse:
     model_key = req.model_key.strip()
-    options = get_model_options()
+    
+    # Get adapter with optional custom registry
+    adapter = _get_adapter(req.merge_custom_registry)
+    options = get_model_options(adapter)
     mi = options.get(model_key)
     if not mi:
         raise HTTPException(status_code=400, detail=f"Unknown model_key: {model_key}")
@@ -281,7 +325,7 @@ async def embed(req: EmbedRequest) -> EmbedResponse:
         if provider == "gemini" and req.normalize_embedding is not None:
             kwargs["normalize_embedding"] = bool(req.normalize_embedding)
 
-        resp = llm_adapter.create_embedding(
+        resp = adapter.create_embedding(
             model=model_key,
             input=req.text,
             **kwargs,

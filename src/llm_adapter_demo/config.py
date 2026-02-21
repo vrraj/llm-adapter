@@ -10,9 +10,15 @@ from dotenv import load_dotenv
 _project_root = Path(__file__).resolve().parents[2]
 load_dotenv(dotenv_path=_project_root / ".env")
 
-def get_model_options() -> Dict[str, Any]:
+# Custom registry configuration
+CUSTOM_REGISTRY_PATH = _project_root / "examples" / "custom_registry.py"
+
+def get_model_options(adapter=None) -> Dict[str, Any]:
+    # Use provided adapter's registry or default registry
+    registry = getattr(adapter, 'model_registry', model_registry.REGISTRY) if adapter else model_registry.REGISTRY
+    
     out: Dict[str, Any] = {}
-    for key, mi in (model_registry.REGISTRY or {}).items():
+    for key, mi in (registry or {}).items():
         provider = str(getattr(mi, "provider", "") or "")
         if not provider:
             continue

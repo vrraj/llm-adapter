@@ -1,5 +1,6 @@
-async function fetchModels() {
-  const res = await fetch("/api/models");
+async function fetchModels(mergeCustomRegistry = false) {
+  const url = mergeCustomRegistry ? "/api/models?merge_custom_registry=true" : "/api/models";
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error("Failed to fetch models: " + res.status);
   }
@@ -57,6 +58,7 @@ async function init() {
   const reasoningEffortSelect = document.getElementById("reasoning_effort_select");
   const maxTokensInput = document.getElementById("max_tokens_input");
   const processingStatus = document.getElementById("processing_status");
+  const mergeCustomRegistryInput = document.getElementById("merge_custom_registry_input");
 
   let modelsByKey = {};
 
@@ -185,44 +187,54 @@ async function init() {
     modelParamsOutput.textContent = JSON.stringify(out, null, 2);
   }
 
-  try {
-    const data = await fetchModels();
-    const models = data.models || {};
-    modelsByKey = models;
-    Object.values(models).forEach((m) => {
-      const opt = document.createElement("option");
-      opt.value = m.key;
-      const enabled = !!m.enabled;
-
-      const modelName = m.model || "?";
-      const endpoint = m.endpoint || "?";
-      const label = `${m.key} (${modelName}, ${endpoint})`;
-
-      opt.textContent = enabled ? label : `${label} [disabled]`;
-      modelKeySelect.appendChild(opt);
-    });
-
-    // Default to a chat-capable enabled model so chat-only controls are not disabled on load.
+  async function loadModels() {
     try {
-      const firstChatEnabled = Object.values(models).find((m) => {
-        if (!m || !m.key) return false;
-        if (!m.enabled) return false;
-        const ep = String(m.endpoint || "").toLowerCase();
-        return ep !== "embeddings" && ep !== "embed_content";
-      });
-      if (firstChatEnabled && firstChatEnabled.key) {
-        modelKeySelect.value = firstChatEnabled.key;
+      const data = await fetchModels(mergeCustomRegistryInput.checked);
+      const models = data.models || {};
+      modelsByKey = models;
+      
+      // Clear existing options
+      while (modelKeySelect.options.length > 0) {
+        modelKeySelect.remove(0);
       }
-    } catch (e) {
-      // ignore
-    }
+      
+      Object.values(models).forEach((m) => {
+        const opt = document.createElement("option");
+        opt.value = m.key;
+        const enabled = !!m.enabled;
 
-    syncUiForSelectedModel();
-    syncModelParamsPanel();
-  } catch (e) {
-    setErrorBanner("Failed to load providers/models", String(e));
-    appendLog("Error loading models: " + String(e));
+        const modelName = m.model || "?";
+        const provider = m.provider || "?";
+        const endpoint = m.endpoint || "?";
+        const label = `${m.key} → ${modelName} (${provider}, ${endpoint})`;
+        opt.textContent = enabled ? label : `${label} [disabled]`;
+        modelKeySelect.appendChild(opt);
+      });
+
+      // Default to a chat-capable enabled model so chat-only controls are not disabled on load.
+      try {
+        const firstChatEnabled = Object.values(models).find((m) => {
+          if (!m || !m.key) return false;
+          if (!m.enabled) return false;
+          const ep = String(m.endpoint || "").toLowerCase();
+          return ep !== "embeddings" && ep !== "embed_content";
+        });
+        if (firstChatEnabled && firstChatEnabled.key) {
+          modelKeySelect.value = firstChatEnabled.key;
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      syncUiForSelectedModel();
+      syncModelParamsPanel();
+    } catch (e) {
+      setErrorBanner("Failed to load providers/models", String(e));
+      appendLog("Error loading models: " + String(e));
+    }
   }
+
+  await loadModels();
 
   async function send() {
     const model_key = modelKeySelect.value;
@@ -249,7 +261,10 @@ async function init() {
     const reasoningEffortRaw = reasoningEffortSelect.value;
 
     let url = "/api/chat";
-    let payload = { model_key };
+    let payload = { 
+      model_key,
+      merge_custom_registry: mergeCustomRegistryInput.checked
+    };
 
     try {
       if (!embedMode) {
@@ -274,6 +289,7 @@ async function init() {
         url = "/api/embed";
         payload.text = text;
         payload.normalize_embedding = !!normalizeEmbeddingInput.checked;
+        payload.merge_custom_registry = mergeCustomRegistryInput.checked;
       }
     } catch (e) {
       setErrorBanner("Request failed", String(e));
@@ -397,6 +413,7 @@ async function init() {
   embedSendBtn.addEventListener("click", send);
   modelKeySelect.addEventListener("change", syncUiForSelectedModel);
   modelKeySelect.addEventListener("change", syncModelParamsPanel);
+  mergeCustomRegistryInput.addEventListener("change", loadModels);
   temperatureInput.addEventListener("input", syncModelParamsPanel);
   topPInput.addEventListener("input", syncModelParamsPanel);
   reasoningEffortSelect.addEventListener("change", syncModelParamsPanel);

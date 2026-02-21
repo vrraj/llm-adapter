@@ -109,8 +109,8 @@ REGISTRY: Dict[str, ModelInfo] = {
         },
         param_policy={"disabled": {"reasoning_effort", "stream"}},
     ),
-    "openai:reasoning_gpt-4o-mini": ModelInfo(
-        key="openai:reasoning_gpt-4o-mini",
+    "openai:reasoning_o3-mini": ModelInfo(
+        key="openai:reasoning_o3_mini",
         provider="openai",
         model="o3-mini",
         endpoint="responses",
@@ -378,39 +378,90 @@ def get_model_info(key: str) -> ModelInfo:
         raise KeyError(f"Unknown model key: {key}")
     return REGISTRY[key]
 
+# ------------------------------
+# Registry validation helpers
+# ------------------------------
 
-def resolve_model(
-    provider: str | None,
-    model: str | None,
-    model_key: str | None = None,
-) -> Optional[ModelInfo]:
-    try:
-        reg = REGISTRY or {}
-        if not reg:
-            return None
+def validate_registry(registry: Dict[str, ModelInfo], *, strict: bool = True) -> None:
+    """Validate a model registry mapping.
 
-        mk = str(model_key).strip() if model_key else ""
-        if mk and mk in reg:
-            return reg.get(mk)
+    This is intended for users who supply a custom registry to `LLMAdapter(model_registry=...)`.
 
-        m = str(model or "").strip()
-        if not m:
-            return None
-        if m in reg:
-            return reg.get(m)
+    Checks:
+    - registry is a non-empty dict
+    - dict key matches ModelInfo.key (when present)
+    - provider and endpoint are valid
+    - pricing values are non-negative numbers (when pricing is present)
+    - limits/capabilities/param_policy/reasoning_policy/thinking_tax are dicts
 
-        p = str(provider or "").strip().lower()
-        for _k, _v in reg.items():
-            try:
-                if not _v:
+    If `strict=True`, raises ValueError on the first error set.
+    If `strict=False`, raises ValueError with aggregated errors (still raises, but includes all).
+    """
+
+    errors: list[str] = []
+
+    if not isinstance(registry, dict) or not registry:
+        raise ValueError("REGISTRY must be a non-empty dict[str, ModelInfo]")
+
+    allowed_providers = {"openai", "gemini"}
+    allowed_endpoints = {"responses", "chat_completions", "embeddings", "gemini_sdk", "embed_content"}
+
+    def _err(msg: str) -> None:
+        if strict:
+            raise ValueError(f"Registry validation failed: {msg}")
+        errors.append(msg)
+
+    for k, mi in registry.items():
+        if not isinstance(k, str) or not k.strip():
+            _err(f"Invalid registry key {k!r}: must be a non-empty string")
+            continue
+
+        if not isinstance(mi, ModelInfo):
+            _err(f"[{k}] value must be a ModelInfo, got {type(mi).__name__}")
+            continue
+
+        # key consistency
+        if getattr(mi, "key", None) and str(mi.key) != k:
+            _err(f"[{k}] ModelInfo.key={mi.key!r} does not match dict key {k!r}")
+
+        # provider / endpoint validation
+        prov = str(getattr(mi, "provider", "")).strip().lower()
+        if prov not in allowed_providers:
+            _err(f"[{k}] provider {prov!r} not in {sorted(allowed_providers)}")
+
+        ep = str(getattr(mi, "endpoint", "")).strip()
+        if ep not in allowed_endpoints:
+            _err(f"[{k}] endpoint {ep!r} not in {sorted(allowed_endpoints)}")
+
+        model_name = str(getattr(mi, "model", "")).strip()
+        if not model_name:
+            _err(f"[{k}] model must be a non-empty string")
+
+        # pricing validation
+        pr = getattr(mi, "pricing", None)
+        if pr is not None:
+            for field_name in ("input_per_mm", "output_per_mm", "cached_input_per_mm"):
+                val = getattr(pr, field_name, None)
+                if val is None:
                     continue
-                if str(getattr(_v, "model", "")) != m:
-                    continue
-                if p and str(getattr(_v, "provider", "")).lower() != p:
-                    continue
-                return _v
-            except Exception:
-                continue
-    except Exception:
-        return None
-    return None
+                try:
+                    f = float(val)
+                    if f < 0:
+                        _err(f"[{k}] pricing.{field_name} must be >= 0, got {val!r}")
+                except Exception:
+                    _err(f"[{k}] pricing.{field_name} must be numeric, got {val!r}")
+
+        # dict-shaped fields
+        for fname in ("capabilities", "param_policy", "limits", "reasoning_policy", "thinking_tax"):
+            v = getattr(mi, fname, None)
+            if v is not None and not isinstance(v, dict):
+                _err(f"[{k}] {fname} must be a dict if set, got {type(v).__name__}")
+
+        # reasoning_parameter shape
+        rp = getattr(mi, "reasoning_parameter", None)
+        if rp is not None:
+            if not isinstance(rp, tuple) or len(rp) != 2 or not isinstance(rp[0], str):
+                _err(f"[{k}] reasoning_parameter must be a (str, Any) tuple, got {rp!r}")
+
+    if errors:
+        raise ValueError("Registry validation failed:\n- " + "\n- ".join(errors))

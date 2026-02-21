@@ -3,7 +3,7 @@ import openai
 import os
 import logging
 import time
-from typing import Any, Dict, Optional, Iterator, TypedDict, List, Callable
+from typing import Any, Dict, Optional, Iterator, TypedDict, List, Callable, Set, Iterable
 
 # Load environment variables from .env file
 try:
@@ -217,6 +217,7 @@ class LLMAdapter:
         openai_base_url: Optional[str] = None,
         gemini_base_url: Optional[str] = None,
         model_registry: Optional[Dict[str, Any]] = None,
+        allowed_model_keys: Optional[Iterable[str]] = None,
         openai_client: Any = None,
         gemini_client: Any = None,
     ):
@@ -225,8 +226,37 @@ class LLMAdapter:
         self.openai_base_url = openai_base_url or os.getenv("OPENAI_BASE_URL")
         self.gemini_base_url = gemini_base_url or os.getenv("GEMINI_OPENAI_BASE_URL")
 
-        # Registry dict: prefer REGISTRY if present; otherwise accept injected mapping.
-        self.model_registry = model_registry or getattr(_model_registry, "REGISTRY", {})
+        # Registry dict:
+        # - Defaults come from package registry (`llm_adapter.model_registry.REGISTRY`).
+        # - Callers may provide their own registry mapping to override individual keys.
+        #   Whole-object override semantics: user entry replaces the default entry for that key.
+        defaults = getattr(_model_registry, "REGISTRY", {})
+        if model_registry is None:
+            # Keep a per-instance copy so caller code can't accidentally mutate package defaults.
+            self.model_registry = dict(defaults)
+        else:
+            # Merge defaults + user overrides (user wins on key collisions).
+            self.model_registry = {**dict(defaults), **dict(model_registry)}
+
+        # Allowlist policy (optional): restrict which registry keys may be used.
+        # Precedence:
+        # 1) allowed_model_keys passed to ctor (explicit wins)
+        # 2) env var LLM_ADAPTER_ALLOWED_MODELS (comma-separated)
+        # 3) None (no restriction)
+        self.allowed_model_keys: Optional[Set[str]] = None
+        if allowed_model_keys is not None:
+            try:
+                self.allowed_model_keys = {str(k).strip() for k in allowed_model_keys if str(k).strip()}
+            except Exception:
+                # Best-effort fallback
+                try:
+                    self.allowed_model_keys = set([str(allowed_model_keys).strip()]) if str(allowed_model_keys).strip() else None
+                except Exception:
+                    self.allowed_model_keys = None
+        else:
+            env_val = os.getenv("LLM_ADAPTER_ALLOWED_MODELS")
+            if isinstance(env_val, str) and env_val.strip():
+                self.allowed_model_keys = {k.strip() for k in env_val.split(",") if k.strip()}
 
         # Optional injected clients (mirrors chat-with-rag handler ctor)
         self._openai = openai_client
@@ -596,7 +626,7 @@ class LLMAdapter:
 
         return self._gemini_native
 
-    def _resolve_model_name(self, model: str) -> str:
+    def _resolve_provider_model_name(self, model: str) -> str:
         """Resolve model alias/registry key to actual model name."""
         try:
             model_info = self.model_registry.get(model)
@@ -607,15 +637,60 @@ class LLMAdapter:
         return model
 
     def _lookup_model_info_from_registry(self, model: str) -> Any | None:
+        """Resolve a model identifier to a ModelInfo entry.
+
+        Resolution order:
+        1) Direct registry-key lookup (preferred)
+        2) Provider-native model name scan (only when allowlist is not enabled)
+
+        If an allowlist is enabled (`self.allowed_model_keys`), callers must use
+        registry keys (e.g. "openai:gpt-4o-mini"). Provider-native model names
+        (e.g. "gpt-4o-mini") are rejected to avoid ambiguity.
+        """
         if not model:
             return None
+
+        def _infer_provider_from_key(k: str) -> str:
+            try:
+                if isinstance(k, str) and ":" in k:
+                    return k.split(":", 1)[0].strip().lower() or "unknown"
+            except Exception:
+                pass
+            return "unknown"
+
         try:
+            # 1) Direct registry-key lookup
             info = self.model_registry.get(model)
             if info is not None:
+                if self.allowed_model_keys is not None and model not in self.allowed_model_keys:
+                    raise LLMError(
+                        provider=_infer_provider_from_key(model),
+                        model=model,
+                        kind="config",
+                        code="model_not_allowed",
+                        message=f"Model '{model}' is not in allowed_model_keys",
+                    )
                 return info
-            for candidate in self.model_registry.values():
+
+            # If allowlist is enabled, do not allow provider-native name lookup.
+            if self.allowed_model_keys is not None:
+                raise LLMError(
+                    provider=_infer_provider_from_key(str(model)),
+                    model=str(model),
+                    kind="config",
+                    code="model_key_required",
+                    message=(
+                        "Allowlist is enabled; model must be referenced by registry key "
+                        "(e.g. 'openai:gpt-4o-mini'), not a provider-native model name."
+                    ),
+                )
+
+            # 2) Provider-native model name scan (best-effort, may be ambiguous)
+            for candidate_key, candidate in self.model_registry.items():
                 if getattr(candidate, "model", None) == model:
                     return candidate
+        except LLMError:
+            raise
         except Exception:
             return None
         return None
@@ -1806,7 +1881,7 @@ class LLMAdapter:
 
     def _openai_call(self, *, model: str, input: Any, stream: bool, **kwargs: Any):
         client = self._get_openai()
-        resolved_model = self._resolve_model_name(model)
+        resolved_model = self._resolve_provider_model_name(model)
         filtered_kwargs = self._filter_kwargs_by_capabilities(model, kwargs)
         mapped_kwargs = self._apply_openai_reasoning_policy(model, filtered_kwargs)
 
@@ -1991,14 +2066,26 @@ class LLMAdapter:
             "total_tokens_used": getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0,
         }
         
+        # Usage extraction (avoid precedence bugs in inline conditional/or expressions)
+        u = getattr(raw_response, "usage", None)
+        pt = 0
+        tt = 0
+        try:
+            if u is not None:
+                pt = getattr(u, "input_tokens", None)
+                if pt is None:
+                    pt = getattr(u, "prompt_tokens", None)
+                pt = int(pt or 0)
+                tt = int(getattr(u, "total_tokens", 0) or 0)
+        except Exception:
+            pt = 0
+            tt = 0
+        
         return EmbeddingResponse(
             data=vectors,  # Direct list of embedding vectors
             usage=EmbeddingUsage(
-                prompt_tokens=(
-                    getattr(raw_response.usage, 'input_tokens', 0) if hasattr(raw_response, 'usage') else 0 or
-                    getattr(raw_response.usage, 'prompt_tokens', 0) if hasattr(raw_response, 'usage') else 0
-                ),
-                total_tokens=getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0
+                prompt_tokens=pt,
+                total_tokens=tt,
             ),
             provider="openai",
             model=resolved_model,

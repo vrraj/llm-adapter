@@ -171,6 +171,190 @@ pytest
    - Applies parameter mapping and capability-based filtering
    - Handles provider routing (OpenAI adapter vs Gemini native SDK)
 
+## Custom model registry (override / extend defaults)
+
+`LLMAdapter` uses the default registry in `src/llm_adapter/model_registry.py`.
+
+You can provide your own registry mapping to `LLMAdapter(model_registry=...)`.
+The adapter will merge registries as:
+
+- Default registry (package) + user registry overrides
+- User entries replace default entries for the same key
+
+### User-side call signature
+
+```python
+from llm_adapter import LLMAdapter
+from my_app.my_registry import REGISTRY as USER_REGISTRY
+
+llm = LLMAdapter(model_registry=USER_REGISTRY)
+```
+
+### Restricting which models can be used (allowlist)
+
+You can restrict which registry keys may be used by setting an allowlist. When an allowlist is enabled, models must be referenced by **registry key** (for example: `openai:gpt-4o-mini`). Provider-native model names (for example: `gpt-4o-mini`) are rejected.
+
+#### Option A: via constructor (`allowed_model_keys`)
+
+```python
+from llm_adapter import LLMAdapter
+
+llm = LLMAdapter(
+    allowed_model_keys={"openai:gpt-4o-mini", "openai:embed_small"}
+)
+```
+
+#### Option B: via environment variable (`LLM_ADAPTER_ALLOWED_MODELS`)
+
+```bash
+export LLM_ADAPTER_ALLOWED_MODELS="openai:gpt-4o-mini,openai:embed_small"
+```
+
+### Validating registries
+
+If you provide your own registry, you can validate it before instantiating the adapter.
+
+```python
+from llm_adapter.model_registry import validate_registry
+from my_app.my_registry import REGISTRY as USER_REGISTRY
+
+validate_registry(USER_REGISTRY, strict=False)
+```
+
+You can also validate the merged registry (defaults + your overrides) after creating the adapter:
+
+```python
+from llm_adapter import LLMAdapter
+from llm_adapter.model_registry import validate_registry
+from my_app.my_registry import REGISTRY as USER_REGISTRY
+
+llm = LLMAdapter(model_registry=USER_REGISTRY)
+validate_registry(llm.model_registry, strict=False)
+```
+
+## Merging Custom Registries (Interactive Demo)
+
+The LLM Adapter includes an **interactive demo UI** that allows you to test custom registries without writing any code. This is perfect for experimenting with new model configurations before integrating them into your application.
+
+### Quick Start with Demo UI
+
+1. **Start the demo server:**
+   ```bash
+   cd llm-adapter
+   source .venv/bin/activate  # or activate your venv
+   python -m uvicorn src.llm_adapter_demo.api:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+2. **Open the UI:** Navigate to `http://localhost:8000/ui`
+
+3. **Enable custom registry:** Check the "Merge custom registry (examples/custom_registry.py)" checkbox
+
+4. **Select your custom models:** The dropdown will now show both default and custom models
+
+### How the Demo Works
+
+The demo UI dynamically loads your custom registry from `examples/custom_registry.py` and merges it with the default registry. When you toggle the checkbox:
+
+- **Unchecked:** Shows only default models from `src/llm_adapter/model_registry.py`
+- **Checked:** Shows merged registry (default + your custom models)
+
+### Creating Your Custom Registry
+
+**File:** `examples/custom_registry.py`
+
+```python
+from llm_adapter.model_registry import ModelInfo, Pricing, validate_registry
+
+REGISTRY = {
+    "openai:custom_reasoning_o3-mini": ModelInfo(
+        key="openai:custom_reasoning_o3-mini",  # Must match dict key
+        provider="openai",
+        model="o3-mini",
+        endpoint="responses",
+        pricing=Pricing(input_per_mm=1.10, output_per_mm=4.40),
+        limits={"max_output_tokens": 2000},
+        capabilities={
+            "assistant_role": "assistant",
+            "reasoning_effort": True,
+        },
+        param_policy={"disabled": {"stream", "temperature", "top_p"}},
+        reasoning_policy={
+            "mode": "openai_effort",
+            "default": "low",
+        },
+        reasoning_parameter=("reasoning_effort", "low"),
+    ),
+    "openai:custom_reasoning_gpt-5-mini": ModelInfo(
+        key="openai:custom_reasoning_gpt-5-mini",  # Must match dict key
+        provider="openai",
+        model="gpt-5-mini",
+        endpoint="responses",
+        pricing=Pricing(input_per_mm=0.25, output_per_mm=2.00),
+        limits={"max_output_tokens": 2000},
+        capabilities={
+            "assistant_role": "assistant",
+            "reasoning_effort": True,
+        },
+        param_policy={"disabled": {"stream", "temperature", "top_p"}},
+        reasoning_policy={
+            "mode": "openai_effort",
+            "default": "minimal",
+        },
+        reasoning_parameter=("reasoning_effort", "minimal"),
+    ),
+}
+
+# Validate your registry (recommended)
+validate_registry(REGISTRY, strict=False)
+```
+
+### Testing Your Custom Registry
+
+**Script:** `examples/import_custom_registry.py`
+
+Run this test script to verify your custom registry works correctly:
+
+```bash
+cd llm-adapter
+source .venv/bin/activate
+python examples/import_custom_registry.py
+```
+
+This script validates:
+- ✅ Custom registry import and merging
+- ✅ Model availability (custom + default)
+- ✅ Pricing lookup for custom models
+- ✅ Registry validation
+- ✅ Model resolution functionality
+
+### Live Updates
+
+**No reinstall required!** When you modify `examples/custom_registry.py`:
+
+1. Save your changes
+2. Toggle the checkbox in the UI (or make a new API call)
+3. Your changes are immediately available
+
+The custom registry is **dynamically imported** on each request, so you can iterate quickly on model configurations.
+
+### Integration Examples
+
+See these files for complete working examples:
+
+- **`examples/custom_registry.py`** - Sample custom registry with reasoning models
+- **`examples/import_custom_registry.py`** - Test script demonstrating programmatic usage
+- **`src/llm_adapter_demo/api.py`** - Backend implementation showing dynamic registry loading
+
+### Production Usage
+
+For production use, you can:
+
+1. **Move your registry** to your application package
+2. **Use the same pattern** as the demo: `LLMAdapter(model_registry=YOUR_REGISTRY)`
+3. **Validate before deployment** using `validate_registry()`
+
+The demo UI provides a sandbox for testing before integrating into your production code.
+
 ### Endpoint semantics (important)
 
 This standalone package uses these routing semantics:
@@ -582,29 +766,22 @@ print(result["text"])
 
 ---
 
-### `llm_adapter.get_pricing_for_model_key(...)`
+### `llm_adapter.get_pricing_for_model(...)`
 
-Registry-based pricing metadata lookup.
+Lookup pricing metadata via the model registry.
+
+This accepts either:
+
+- a registry model key (e.g. `openai:gpt-4o-mini`), or
+- a provider-native model name (e.g. `gpt-4o-mini-2024-07-18`) when resolvable.
 
 ```python
-pricing = llm_adapter.get_pricing_for_model_key("openai:gpt-4o-mini")
+pricing = llm_adapter.get_pricing_for_model("openai:gpt-4o-mini")
+pricing2 = llm_adapter.get_pricing_for_model("gpt-4o-mini-2024-07-18")
 ```
 
 - Returns pricing metadata stored in the model registry (if defined).
 - Does not compute costs — exposes registry metadata only.
-
----
-
-### `llm_adapter.get_pricing_for_model(...)`
-
-Lookup pricing metadata using provider-native model name.
-
-```python
-pricing = llm_adapter.get_pricing_for_model("gpt-4o-mini-2024-07-18")
-```
-
-- Resolves registry entry from provider model name.
-- Returns associated pricing metadata if present.
 
 ## Environment variables
 
