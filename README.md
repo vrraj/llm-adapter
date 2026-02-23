@@ -23,8 +23,7 @@ This package provides:
 - **Custom model registry** support (override/extend the defaults)
 - **Normalized response helper**: text, tool calls, reasoning tokens (if available), and usage
 - **Registry-based pricing** metadata helpers
-- Explicit **endpoint routing** (OpenAI Responses, Chat Completions, Embeddings; Gemini native SDK; Gemini OpenAI-compatible)
-- `ModelRegistry`: model resolution, capability filtering, and parameter mapping
+- `ModelRegistry`: explicit endpoint routing (**OpenAI** - responses API, chat completions and embeddings; **Gemini** - openai adapter API, gemini sdk and embeddings) + model resolution, capability filtering, and parameter mapping
 - `ModelSpec`: reusable, typed configuration (structured alternative to kwargs)
 - **Streaming** supported at library level
 
