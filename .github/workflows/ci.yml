@@ -36,8 +36,8 @@ jobs:
 
     - name: Test examples
       run: |
-        python examples/test_openai_chat.py --help 2>/dev/null || echo "✅ Chat example works"
-        python examples/test_openai_embeddings.py --help 2>/dev/null || echo "✅ Embedding example works"
+        python examples/openai_adapter_example.py --help 2>/dev/null || echo "✅ Chat example works"
+        python examples/openai_embedding_example.py --help 2>/dev/null || echo "✅ Embedding example works"
         python examples/test_model_spec.py 2>/dev/null || echo "✅ ModelSpec example works"
 
     - name: Check package build
