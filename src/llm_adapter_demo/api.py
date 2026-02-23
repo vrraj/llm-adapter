@@ -212,20 +212,20 @@ async def chat(req: ChatRequest) -> ChatResponse:
             max_output_tokens=req.max_output_tokens,
         )
 
-        normalized = adapter.build_llm_result_from_response(resp, provider=provider)
+        normalized = adapter.normalize_adapter_response(resp, provider=provider)
         return ChatResponse(
             ok=True,
             answer_text=normalized.get("text"),
             reasoning_text=normalized.get("reasoning"),
             raw_usage=normalized.get("usage"),
             provider_response=jsonable_encoder(resp),
-            normalized_result=jsonable_encoder(adapter.build_llm_result_from_response(resp, provider=provider)),
+            normalized_result=jsonable_encoder(adapter.normalize_adapter_response(resp, provider=provider)),
             provider_request=jsonable_encoder(provider_request),
             format_request=jsonable_encoder(
                 {
                     "calls": [
                         {
-                            "call": "llm_adapter.build_llm_result_from_response",
+                            "call": "llm_adapter.normalize_adapter_response",
                             "params": {
                                 "resp": "<adapter_response attribute from llm_adapter.create()>",
                                 "provider": provider,
@@ -364,7 +364,7 @@ async def embed(req: EmbedRequest) -> EmbedResponse:
             format_request=jsonable_encoder(
                 {
                     "calls": [],
-                    "note": "Embeddings do not call build_llm_result/build_llm_result_from_response; normalized_result omitted.",
+                    "note": "Embeddings do not call build_llm_result/normalize_adapter_response; normalized_result omitted.",
                 }
             ),
         )

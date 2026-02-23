@@ -103,7 +103,7 @@ def test_build_llm_result_prefers_adapter_tool_calls_over_raw_parsing():
     )
     _dbg("AdapterResponse", fake_resp)
 
-    result = adapter.build_llm_result_from_response(fake_resp, provider="openai")
+    result = adapter.normalize_adapter_response(fake_resp, provider="openai")
     _dbg("LLMResult", result)
 
     assert result["tool_calls"] == [

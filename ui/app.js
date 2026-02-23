@@ -137,41 +137,8 @@ async function init() {
     syncModelParamsPanel();
   }
 
-  function buildResolvedRequestPreview() {
-    const mi = getSelectedModelInfo();
-    const embedMode = isEmbeddingModel(mi);
-
-    const temperatureRaw = temperatureInput.value.trim();
-    const topPRaw = topPInput.value.trim();
-    const maxTokensRaw = maxTokensInput.value.trim();
-    const reasoningEffortRaw = reasoningEffortSelect.value;
-
-    if (!embedMode) {
-      const payload = {
-        model_key: modelKeySelect.value,
-        prompt: (promptInput.value || "").trim(),
-      };
-      if (temperatureRaw) payload.temperature = Number(temperatureRaw);
-      if (topPRaw) payload.top_p = Number(topPRaw);
-      if (maxTokensRaw) payload.max_output_tokens = Number(maxTokensRaw);
-      if (reasoningEffortRaw) payload.reasoning_effort = reasoningEffortRaw;
-      return { endpoint: "/api/chat", request_model: payload };
-    }
-
-    return {
-      endpoint: "/api/embed",
-      request_model: {
-        model_key: modelKeySelect.value,
-        text: (embedInput.value || "").trim(),
-        normalize_embedding: !!normalizeEmbeddingInput.checked,
-        output_dimensionality: outputDimensionInput.value ? Number(outputDimensionInput.value) : undefined,
-      },
-    };
-  }
-
   function syncModelParamsPanel() {
     const mi = getSelectedModelInfo();
-    const preview = buildResolvedRequestPreview();
 
     // Set output dimension placeholder to model default for embeddings
     if (outputDimensionInput && isEmbeddingModel(mi)) {
@@ -179,12 +146,8 @@ async function init() {
       outputDimensionInput.placeholder = defaultDim ? String(defaultDim) : "auto (from model)";
     }
 
-    const out = {
-      model_registry_entry: mi,
-      request_preview: preview,
-    };
-
-    modelParamsOutput.textContent = JSON.stringify(out, null, 2);
+    // Show only the complete ModelInfo
+    modelParamsOutput.textContent = JSON.stringify(mi, null, 2);
   }
 
   async function loadModels() {
@@ -198,13 +161,43 @@ async function init() {
         modelKeySelect.remove(0);
       }
       
-      Object.values(models).forEach((m) => {
+      // Sort models by provider, then by model name
+      const sortedModels = Object.values(models).sort((a, b) => {
+        const providerA = (a.provider || "").toLowerCase();
+        const providerB = (b.provider || "").toLowerCase();
+        const modelA = (a.model || "").toLowerCase();
+        const modelB = (b.model || "").toLowerCase();
+        
+        if (providerA !== providerB) {
+          return providerA.localeCompare(providerB);
+        }
+        return modelA.localeCompare(modelB);
+      });
+      
+      // Group by provider and add separator lines
+      let currentProvider = null;
+      sortedModels.forEach((m) => {
+        const provider = m.provider || "?";
+        
+        // Add provider separator if changed (including first provider)
+        if (currentProvider !== provider) {
+          // Add separator line
+          const separator = document.createElement("option");
+          separator.value = "";
+          separator.textContent = `--- ${provider.toUpperCase()} ---`;
+          separator.disabled = true;
+          separator.style.fontWeight = "bold";
+          separator.style.color = "#666";
+          separator.style.backgroundColor = "#f5f5f5";
+          modelKeySelect.appendChild(separator);
+          currentProvider = provider;
+        }
+        
         const opt = document.createElement("option");
         opt.value = m.key;
         const enabled = !!m.enabled;
 
         const modelName = m.model || "?";
-        const provider = m.provider || "?";
         const endpoint = m.endpoint || "?";
         const label = `${m.key} → ${modelName} (${provider}, ${endpoint})`;
         opt.textContent = enabled ? label : `${label} [disabled]`;

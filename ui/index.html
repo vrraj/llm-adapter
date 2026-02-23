@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>LLM Adapter Module Testing</title>
+    <title>LLM Adapter Interactive Playground</title>
     <link rel="stylesheet" href="/ui/styles.css" />
   </head>
   <body>
     <div class="app">
       <header class="header">
-        <h2>LLM Adapter Module Testing</h2>
-        <p class="subtitle" style="font-style: italic;">Interactive demo for testing <font style="font-weight: bold">LLM Adapter API connectivity</font> and <font style="font-weight: bold">response format comparison</font> across providers. Features real-time parameter mapping, usage tracking, and normalized response processing. For streaming examples, see examples/test_streaming.py.</p>
+        <h2>LLM Adapter Interactive Playground</h2>
+        <p class="subtitle" style="font-style: italic;">Interactive demo for exploring multi-provider LLM calls via the LLM Adapter. Compare parameter mapping, usage tracking, normalized responses, and optional <strong>custom registry</strong> extensions in real time. For <strong>streaming </strong> examples, see examples/test_streaming.py.</p>
       <hr>
       <br>
       </header>
@@ -20,13 +20,13 @@
           <div class="field">
             <label for="merge_custom_registry_input">
               <input id="merge_custom_registry_input" type="checkbox" checked />
-              Merge custom registry (examples/custom_registry.py)
+              Enable <strong>custom registry</strong> (examples/custom_registry.py)
             </label>
           </div>
         </div>
         <div class="controls-row">
           <div class="field">
-            <label for="model_key_select">Model (Model Key (Model, API Endpoint))</label>
+            <label for="model_key_select">Model [Model Key → Model(Provider, API Endpoint)]</label>
             <select id="model_key_select"></select>
           </div>
         </div>
@@ -81,7 +81,7 @@
             <pre id="responses_request_output" class="response-output"></pre>
           </details>
           <details id="format_request_details">
-            <summary>Call Signature for Format LLM Response</summary>
+            <summary>Call Signature for Normalize Adapter Response</summary>
             <pre id="format_request_output" class="response-output"></pre>
           </details>
         </div>
@@ -106,17 +106,17 @@
             <pre id="responses_request_output_embed" class="response-output"></pre>
           </details>
           <details id="format_request_details_embed">
-            <summary>Call Signature for Format LLM Response</summary>
+            <summary>Call Signature for Normalize Adapter Response</summary>
             <pre id="format_request_output_embed" class="response-output"></pre>
           </details>
         </div>
       </section>
 
       <section class="response-section" id="chat_response_section">
-        <h4>Reasoning / Thinking Tokens</h4>
-        <pre id="reasoning_output" class="response-output"></pre>
         <h4>Answer / Response</h4>
         <pre id="answer_output" class="response-output"></pre>
+        <h4>Reasoning / Thinking Tokens</h4>
+        <pre id="reasoning_output" class="response-output"></pre>
       </section>
 
       <section class="response-section" id="embed_response_section" hidden>
@@ -131,11 +131,11 @@
       </section>
 
       <section class="response-section">
-        <h4>LLMAdapter.create() Response</h4>
+        <h4>LLMAdapter.create() - LLM Response</h4>
         <pre id="raw_api_output" class="response-output"></pre>
       </section>
       <section class="response-section">
-        <h4>Format LLM Response - build_llm_result_from_response()</h4>
+        <h4>LLMAdapter.normalize_adapter_response() - Normalize LLM Response</h4>
         <pre id="normalized_output" class="response-output"></pre>
       </section>
     </div>

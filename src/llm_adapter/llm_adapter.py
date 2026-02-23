@@ -333,17 +333,20 @@ class LLMAdapter:
         except Exception:
             return None
 
-    def build_llm_result_from_response(
+    def normalize_adapter_response(
         self,
         resp: Any, # AdapterResponse from llm_adapter.create(...)
         *,
         provider: Optional[str] = None,
         model_key: Optional[str] = None,
     ) -> LLMResult:
-        """Build a normalized LLMResult from a non-streaming response."""
+        """Normalize an AdapterResponse into a canonical LLMResult.
 
-        # Fast-path: if caller passed an AdapterResponse from this adapter, do not re-parse
-        # provider-native responses here (prevents drift). Only do lightweight normalization.
+        Convert an AdapterResponse into a standardized LLMResult.
+        This is the stable, application-facing output of llm_adapter. 
+        Use this method to integrate responses into your application without depending on provider-specific response schemas.
+        """
+
         if isinstance(resp, AdapterResponse):
             ar = resp
             meta: Dict[str, Any] = ar.metadata if isinstance(ar.metadata, dict) else {}
@@ -507,7 +510,7 @@ class LLMAdapter:
             model=None,
             kind="request",
             code="adapter_response_required",
-            message="build_llm_result_from_response expects an AdapterResponse produced by LLMAdapter.create()",
+            message="normalize_adapter_response expects an AdapterResponse produced by LLMAdapter.create()",
         )
 
     

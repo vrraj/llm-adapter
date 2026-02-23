@@ -14,7 +14,7 @@ The `llm-adapter` package provides a unified interface for LLM generation and em
 - **Response Normalization**: Consistent response format across providers
 - **Streaming Support**: Built-in streaming capabilities
 - **Embedding Metadata**: Track magnitude and normalization information
-- **Interactive Demo**: Web UI for testing and comparison (available when running from source)
+- **Interactive Demo**: **LLM Adapter Interactive Playground** for testing and comparison (available when running from source)
 
 ### Supported Providers
 - **OpenAI**: GPT models and text embeddings
@@ -45,8 +45,9 @@ resp = llm_adapter.create_embedding(
 ### Documentation
 - Full documentation in README.md
 - API reference with examples
-- Demo UI at http://localhost:8100/ui/
-- Test scripts in examples/
+- **LLM Adapter Interactive Playground** at http://localhost:8100/ui/
+- Test scripts in examples/ folder
+- **Unit and integration tests** in tests/ folder
 
 ### Technical Details
 - **Python 3.10+** required for union type syntax
@@ -55,9 +56,22 @@ resp = llm_adapter.create_embedding(
 - **Pricing metadata** helpers available
 - **Environment variables** for API keys
 
+### Examples and Testing
+- **User Examples**: Practical scripts demonstrating real-world usage
+  - `openai_adapter_example.py` - Chat completions
+  - `openai_embedding_example.py` - Text embeddings
+  - `streaming_call_example.py` - Real-time streaming
+  - `setting_openai_base_url.py` - Custom endpoints
+  - `get_model_pricing_example.py` - Pricing lookup
+  - `set_adapter_allowed_models.py` - Model allowlists
+  - `custom_registry.py` - Custom model definitions
+- **Unit Tests**: Fast tests without API key requirements
+- **Integration Tests**: Full API tests with real providers
+- **CI/CD**: Automated testing across Python 3.10-3.13
+
 ### Known Limitations
 - Currently supports OpenAI and Gemini providers
-- Streaming examples require separate test scripts
+- Integration tests require API keys for full functionality
 - Some advanced provider features may need direct SDK usage
 
 ### Future Roadmap

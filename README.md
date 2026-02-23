@@ -725,7 +725,7 @@ print(f"Output text: {resp.output_text}")
 print(f"Usage: {resp.usage}")
 ```
 
->`llm_adapter.create(...)` returns the provider-native response object. Use `llm_adapter.build_llm_result_from_response(...)` for a provider-agnostic normalized view (see API Reference below).
+>`llm_adapter.create(...)` returns the provider-native response object. Use `llm_adapter.normalize_adapter_response(...)` for a provider-agnostic normalized view (see API Reference below).
 
 
 ### Streaming
@@ -795,12 +795,12 @@ Returns `EmbeddingResponse` with normalized structure across providers:
 
 ---
 
-### `llm_adapter.build_llm_result_from_response(...)`
+### `llm_adapter.normalize_adapter_response(...)`
 
 Provider-agnostic normalization helper.
 
 ```python
-result = llm_adapter.build_llm_result_from_response(
+result = llm_adapter.normalize_adapter_response(
     resp,
     provider: Optional[str] = None,
     model_key: Optional[str] = None
@@ -822,7 +822,7 @@ resp = llm_adapter.create(
     input=[{"role": "user", "content": "Explain gravity briefly"}],
 )
 
-result = llm_adapter.build_llm_result_from_response(
+result = llm_adapter.normalize_adapter_response(
     resp,
     model_key="gemini:openai-reasoning-2.5-flash"
 )
@@ -840,7 +840,7 @@ resp = llm_adapter.create(
     input=[{"role": "user", "content": "Hello"}],
 )
 
-result = llm_adapter.build_llm_result_from_response(
+result = llm_adapter.normalize_adapter_response(
     resp,
     provider="openai"
 )
@@ -858,7 +858,7 @@ resp = llm_adapter.create(
     input="Hello",
 )
 
-result = llm_adapter.build_llm_result_from_response(resp)
+result = llm_adapter.normalize_adapter_response(resp)
 
 print(result["provider"])
 print(result["text"])
@@ -882,6 +882,23 @@ pricing2 = llm_adapter.get_pricing_for_model("gpt-4o-mini-2024-07-18")
 
 - Returns pricing metadata stored in the model registry (if defined).
 - Does not compute costs — exposes registry metadata only.
+
+## Internal Architecture
+
+### Model Registry Design
+
+The model registry uses registry keys as unique identifiers (e.g., `"openai:gpt-4o-mini"`) with comprehensive metadata including pricing, capabilities, parameter restrictions, and provider-specific configurations.
+
+### API Response Format
+
+The demo UI converts internal `ModelInfo` objects to JSON-compatible responses for browser consumption, including runtime status like provider availability.
+
+### Key Principles
+
+- **Registry keys** serve as the sole model identifier (no redundant `ModelInfo.key` field)
+- **Provider inference** from key format (`"provider:model"`)
+- **JSON serialization** ensures browser compatibility
+- **Runtime validation** maintains registry integrity
 
 ## Unified Token Accounting
 
@@ -943,7 +960,7 @@ Supported env vars:
 
 ## Run the demo FastAPI server + UI
 
-You can start the demo directly with `uvicorn` or via the `Makefile`.
+You can start the **LLM Adapter Interactive Playground** directly with `uvicorn` or via the `Makefile`.
 
 ### Option A: direct uvicorn
 
@@ -952,7 +969,7 @@ uvicorn llm_adapter_demo.api:app --reload --port 8100
 ```
 
 * API root: http://127.0.0.1:8100/
-* Demo UI: http://127.0.0.1:8100/ui/
+* **LLM Adapter Interactive Playground**: http://127.0.0.1:8100/ui/
 
 ### Option B: Makefile helpers
 
@@ -976,19 +993,30 @@ make kill   # SIGKILL
 make logs
 ```
 
-The UI will:
+The **LLM Adapter Interactive Playground** will:
 
 - Call `/api/models` to list available registry model keys (and whether each provider is enabled based on env vars).
 - Call `/api/chat` to send prompts to the selected model key via `llm_adapter.create(...)`.
 
-The UI/API supports additional inference parameters:
+The **LLM Adapter Interactive Playground**/API supports additional inference parameters:
 
 - `temperature`
 - `top_p`
 - `reasoning_effort`
 - `max_output_tokens`
 
-When `reasoning_effort` is set for a reasoning-capable Gemini model, the handler requests thoughts via `include_thoughts` and the UI displays both **Reasoning** and **Answer** separately.
+When `reasoning_effort` is set for a reasoning-capable Gemini model, the handler requests thoughts via `include_thoughts` and the **LLM Adapter Interactive Playground** displays both **Reasoning** and **Answer** separately.
+
+### ModelInfo API Response
+
+The demo API (`src/llm_adapter_demo/config.py`) serializes `ModelInfo` objects for UI consumption:
+
+- **Registry key** is added from the dictionary key (no redundant `ModelInfo.key` field)
+- **Pricing objects** are converted to JSON-compatible dictionaries
+- **Runtime status** (`enabled`) is added based on environment variable availability
+- **All fields** are converted to JSON-serializable formats for browser compatibility
+
+This ensures the **LLM Adapter Interactive Playground** can display complete model information including pricing, capabilities, parameter restrictions, and real-time provider availability.
 
 
 ## Examples

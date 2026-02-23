@@ -179,7 +179,7 @@ thought_signature=b"\x12\xb9\x07\n\xb6\x07\x01\xbe>\xf6\xfbV\xc6\x8ff\xb1YUe\xef
 
 ```python
 # Using the adapter_response (normalized)
-result = llm_adapter.build_llm_result_from_response(resp)
+result = llm_adapter.normalize_adapter_response(resp)
 print(result["text"])                    # Normalized text
 print(result["usage"])                   # Normalized usage
 
@@ -208,4 +208,4 @@ When migrating from direct SDK usage to the adapter:
 - Replace direct field access with normalized equivalents
 - Update usage calculations to use normalized fields
 - Add error handling for missing optional fields
-- Consider using `build_llm_result_from_response()` for maximum compatibility
+- Consider using `normalize_adapter_response()` for maximum compatibility

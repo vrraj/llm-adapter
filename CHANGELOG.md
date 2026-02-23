@@ -9,14 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial release preparation
-- Provider and model inference system for `build_llm_result_from_response()`
+- Provider and model inference system for `normalize_adapter_response()`
 - Enhanced parameter mapping for Gemini reasoning models
 - Improved UI documentation and API call signatures
 - Complete project metadata and URLs
 
 ### Changed
 - Removed redundant `build_llm_result()` wrapper method
-- Updated backend to use `build_llm_result_from_response()` directly
+- Updated backend to use `normalize_adapter_response()` directly
 - Simplified API structure and documentation
 
 ### Fixed

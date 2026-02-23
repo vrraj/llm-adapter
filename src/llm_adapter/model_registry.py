@@ -17,22 +17,20 @@ class Pricing:
 
 @dataclass(frozen=True)
 class ModelInfo:
-    key: str
     provider: Provider
     model: str
     endpoint: Endpoint
     pricing: Optional[Pricing]
-    capabilities: Dict[str, Any] = field(default_factory=dict)
     param_policy: Dict[str, Any] = field(default_factory=dict)
     limits: Dict[str, Any] = field(default_factory=dict)
     reasoning_policy: Dict[str, Any] = field(default_factory=dict)
     thinking_tax: Dict[str, Any] = field(default_factory=dict)
     reasoning_parameter: Optional[Tuple[str, Any]] = None
+    capabilities: Dict[str, Any] = field(default_factory=dict)
 
 
 REGISTRY: Dict[str, ModelInfo] = {
     "openai:embed_small": ModelInfo(
-        key="openai:embed_small",
         provider="openai",
         model="text-embedding-3-small",
         endpoint="embeddings",
@@ -43,7 +41,6 @@ REGISTRY: Dict[str, ModelInfo] = {
         },
     ),
     "openai:embed_large": ModelInfo(
-        key="openai:embed_large",
         provider="openai",
         model="text-embedding-3-large",
         endpoint="embeddings",
@@ -54,7 +51,6 @@ REGISTRY: Dict[str, ModelInfo] = {
         },
     ),
     "openai:gpt-4o-mini": ModelInfo(
-        key="openai:gpt-4o-mini",
         provider="openai",
         model="gpt-4o-mini",
         endpoint="responses",
@@ -62,13 +58,12 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
+        param_policy={"disabled": {"reasoning_effort", "stream"}},
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
-        param_policy={"disabled": {"reasoning_effort", "stream"}},
     ),
     "openai:gpt-4o": ModelInfo(
-        key="openai:gpt-4o",
         provider="openai",
         model="gpt-4o",
         endpoint="responses",
@@ -76,13 +71,12 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens":  2000
         },
+        param_policy={"disabled": {"reasoning_effort", "stream"}},
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
-        param_policy={"disabled": {"reasoning_effort", "stream"}},
     ),
     "openai:chat_gpt-4o-mini": ModelInfo(
-        key="openai:chat_gpt-4o-mini",
         provider="openai",
         model="gpt-4o-mini",
         endpoint="chat_completions",
@@ -90,13 +84,12 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
+        param_policy={"disabled": {"reasoning_effort", "stream"}},
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
-        param_policy={"disabled": {"reasoning_effort", "stream"}},
     ),
     "openai:chat_gpt-4o": ModelInfo(
-        key="openai:chat_gpt-4o",
         provider="openai",
         model="gpt-4o",
         endpoint="chat_completions",
@@ -104,13 +97,12 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
+        param_policy={"disabled": {"reasoning_effort", "stream"}},
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
-        param_policy={"disabled": {"reasoning_effort", "stream"}},
     ),
     "openai:reasoning_o3-mini": ModelInfo(
-        key="openai:reasoning_o3_mini",
         provider="openai",
         model="o3-mini",
         endpoint="responses",
@@ -118,19 +110,18 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        capabilities={
-            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
-            "reasoning_effort": True,
-        },
         param_policy={"disabled": {"stream", "temperature", "top_p"}},
         reasoning_policy={
             "mode": "openai_effort",
             "default": "low",
         },
         reasoning_parameter=("reasoning_effort", "low"),
+        capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
+            "reasoning_effort": True,
+        },
     ),
     "openai:reasoning_gpt-5-mini": ModelInfo(
-        key="openai:reasoning_gpt-5-mini",
         provider="openai",
         model="gpt-5-mini",
         endpoint="responses",
@@ -138,19 +129,18 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        capabilities={
-            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
-            "reasoning_effort": True,
-        },
         param_policy={"disabled": {"stream", "temperature", "top_p"}},
         reasoning_policy={
             "mode": "openai_effort",
             "default": "minimal",
         },
         reasoning_parameter=("reasoning_effort", "minimal"),
+        capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
+            "reasoning_effort": True,
+        },
     ),
     "gemini:native-embed": ModelInfo(
-        key="gemini:native-embed",
         provider="gemini",
         model="gemini-embedding-001",
         endpoint="embed_content",
@@ -163,16 +153,12 @@ REGISTRY: Dict[str, ModelInfo] = {
         },
     ),
     "gemini:openai-2.5-flash-lite": ModelInfo(
-        key="gemini:openai-2.5-flash-lite",
         provider="gemini",
         model="models/gemini-2.5-flash-lite",
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=0.20, output_per_mm=0.80),
         limits={
             "max_output_tokens": 2000
-        },
-        capabilities={
-            "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
         },
         param_policy={"disabled": {"reasoning_effort"}},
         thinking_tax={
@@ -184,19 +170,17 @@ REGISTRY: Dict[str, ModelInfo] = {
             },
             "kind": "budget",
         },
+        capabilities={
+            "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
+        },
     ),
     "gemini:openai-3-flash-preview": ModelInfo(
-        key="gemini:openai-3-flash-preview",
         provider="gemini",
         model="models/gemini-3-flash-preview",
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=0.50, output_per_mm=3.00),
         limits={
             "max_output_tokens": 2000
-        },
-        capabilities={
-            "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
-            "reasoning_effort": True,
         },
         param_policy={},
         reasoning_policy={
@@ -237,9 +221,12 @@ REGISTRY: Dict[str, ModelInfo] = {
             },
             "kind": "level",
         },
+        capabilities={
+            "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
+            "reasoning_effort": True,
+        },
     ),
     "gemini:native-sdk-3-flash-preview": ModelInfo(
-        key="gemini:native-sdk-3-flash-preview",
         provider="gemini",
         model="models/gemini-3-flash-preview",
         endpoint="gemini_sdk",
@@ -292,7 +279,6 @@ REGISTRY: Dict[str, ModelInfo] = {
         },
     ),
     "gemini:openai-reasoning-2.5-flash": ModelInfo(
-        key="gemini:openai-reasoning-2.5-flash",
         provider="gemini",
         model="models/gemini-2.5-flash",
         endpoint="chat_completions",
@@ -333,7 +319,6 @@ REGISTRY: Dict[str, ModelInfo] = {
         },
     ),
     "gemini:native-sdk-reasoning-2.5-flash": ModelInfo(
-        key="gemini:native-sdk-reasoning-2.5-flash",
         provider="gemini",
         model="models/gemini-2.5-flash",
         endpoint="gemini_sdk",
@@ -389,7 +374,6 @@ def validate_registry(registry: Dict[str, ModelInfo], *, strict: bool = True) ->
 
     Checks:
     - registry is a non-empty dict
-    - dict key matches ModelInfo.key (when present)
     - provider and endpoint are valid
     - pricing values are non-negative numbers (when pricing is present)
     - limits/capabilities/param_policy/reasoning_policy/thinking_tax are dicts
@@ -419,10 +403,6 @@ def validate_registry(registry: Dict[str, ModelInfo], *, strict: bool = True) ->
         if not isinstance(mi, ModelInfo):
             _err(f"[{k}] value must be a ModelInfo, got {type(mi).__name__}")
             continue
-
-        # key consistency
-        if getattr(mi, "key", None) and str(mi.key) != k:
-            _err(f"[{k}] ModelInfo.key={mi.key!r} does not match dict key {k!r}")
 
         # provider / endpoint validation
         prov = str(getattr(mi, "provider", "")).strip().lower()
