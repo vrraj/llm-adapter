@@ -355,6 +355,78 @@ For production use, you can:
 
 The demo UI provides a sandbox for testing before integrating into your production code.
 
+## Custom Registry Override
+
+For quick registry overrides without the demo UI:
+
+1. **Copy the template from examples/custom_registry.py**
+   ```bash
+   # Start with the provided template
+   cp examples/custom_registry.py my_app/my_registry.py
+   ```
+
+2. **Modify only what you need (or add new models)**
+   ```python
+   # Option A: Override existing model from template
+   "openai:custom_reasoning_o3-mini": ModelInfo(
+       # Keep most template defaults, change only what you need
+       pricing=Pricing(input_per_mm=0.8, output_per_mm=3.2),  # Custom pricing
+       limits={"max_output_tokens": 3000},  # Custom limits
+   )
+   
+   # Option B: Add entirely new model
+   "openai:custom-gpt4-turbo": ModelInfo(
+       key="openai:custom-gpt4-turbo",
+       provider="openai", 
+       model="gpt-4-turbo",
+       endpoint="chat_completions",
+       pricing=Pricing(input_per_mm=0.3, output_per_mm=0.9),
+       limits={"max_output_tokens": 4096},
+       capabilities={"assistant_role": "assistant"},
+   )
+   ```
+
+3. **Instantiate LLMAdapter with your registry**
+   ```python
+   from llm_adapter import LLMAdapter
+   from my_app.my_registry import REGISTRY as YOUR_REGISTRY
+   
+   llm = LLMAdapter(model_registry=YOUR_REGISTRY)
+   ```
+
+4. **(Optional) Use allowed_model_keys for strict environments**
+   ```python
+   # Restrict to only specific models
+   llm = LLMAdapter(
+       model_registry=YOUR_REGISTRY,
+       allowed_model_keys={"openai:gpt-4o-mini", "openai:embed_small"}
+   )
+   ```
+
+This approach gives you full control over model configurations while maintaining the same API interface.
+
+### Registry Override Behavior
+
+**Custom registries override default registry keys with the same key:**
+
+- **Same key**: Custom model replaces default model
+- **Different key**: Custom model is added to defaults
+- **Merged result**: Your custom registry + remaining defaults
+
+```python
+# Example: Override default gpt-4o-mini with custom pricing
+"openai:gpt-4o-mini": ModelInfo(
+    key="openai:gpt-4o-mini",  # Same key as default registry
+    provider="openai",
+    model="gpt-4o-mini",
+    endpoint="chat_completions",
+    pricing=Pricing(input_per_mm=0.2, output_per_mm=0.6),  # Custom pricing overrides default
+    # ... other fields
+)
+```
+
+**Result**: When you use `LLMAdapter(model_registry=YOUR_REGISTRY)`, the custom `openai:gpt-4o-mini` completely replaces the default one.
+
 ### Endpoint semantics (important)
 
 This standalone package uses these routing semantics:

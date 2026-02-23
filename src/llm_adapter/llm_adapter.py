@@ -176,10 +176,13 @@ class LLMAdapter:
 
             rt = raw.get("reasoning_tokens")
 
+            at = raw.get("answer_tokens")
+
             in_i = int(it or 0)
             out_i = int(ot or 0)
             cached_i = int(ct or 0)
             reason_i = int(rt or 0)
+            answer_i = int(at or 0)
 
             # Total tokens: prefer explicit value; otherwise default to input+output.
             if tt is None:
@@ -200,6 +203,7 @@ class LLMAdapter:
                 "total_tokens": total_i,
                 "cached_tokens": cached_i,
                 "reasoning_tokens": reason_i,
+                "answer_tokens": answer_i,
                 # Legacy aliases
                 "prompt_tokens": in_i,
                 "completion_tokens": out_i,
@@ -271,6 +275,7 @@ class LLMAdapter:
         cached_tokens: int
         output_tokens: int
         reasoning_tokens: int
+        answer_tokens: int
         completion_tokens: int
         total_tokens: int
 
@@ -460,6 +465,7 @@ class LLMAdapter:
                 "cached_tokens": 0,
                 "output_tokens": 0,
                 "reasoning_tokens": 0,
+                "answer_tokens": 0,
                 "completion_tokens": 0,
                 "total_tokens": 0,
             }
@@ -473,6 +479,7 @@ class LLMAdapter:
                     ct = u.get("cached_tokens")
                     tt = u.get("total_tokens")
                     comp = u.get("completion_tokens")
+                    ans = u.get("answer_tokens")
 
                     usage["input_tokens"] = int(it or 0)
                     usage["output_tokens"] = int(ot or 0)
@@ -484,15 +491,23 @@ class LLMAdapter:
                     else:
                         usage["total_tokens"] = int(tt or 0)
 
-                    # Visible completion tokens (answer-only):
-                    # Prefer explicit completion_tokens from AdapterResponse.usage when present.
+                    # completion_tokens is a legacy alias for output_tokens (NOT answer-only).
                     try:
                         if comp is not None:
                             usage["completion_tokens"] = int(comp or 0)
                         else:
-                            usage["completion_tokens"] = max(int(usage["output_tokens"]) - int(usage["reasoning_tokens"]), 0)
+                            usage["completion_tokens"] = int(usage["output_tokens"])
                     except Exception:
                         usage["completion_tokens"] = int(usage["output_tokens"])
+
+                    # answer_tokens is the visible/non-reasoning portion of the output.
+                    try:
+                        if ans is not None:
+                            usage["answer_tokens"] = int(ans or 0)
+                        else:
+                            usage["answer_tokens"] = max(int(usage["output_tokens"]) - int(usage["reasoning_tokens"]), 0)
+                    except Exception:
+                        usage["answer_tokens"] = max(int(usage["output_tokens"]) - int(usage["reasoning_tokens"]), 0)
             except Exception:
                 pass
 
@@ -900,35 +915,87 @@ class LLMAdapter:
                 u = getattr(resp, "usage", None)
                 if u is None:
                     return None
+
                 it = getattr(u, "input_tokens", None)
                 ot = getattr(u, "output_tokens", None)
                 tt = getattr(u, "total_tokens", None)
-                reasoning = None
 
-                # Extract reasoning_tokens from output_tokens_details if present
-                out_details = getattr(u, "output_tokens_details", None)
-                if out_details is not None:
-                    reasoning = getattr(out_details, "reasoning_tokens", None)
-
-                # Canonical + legacy keys, always present if usage exists
-                if it is not None or ot is not None or tt is not None:
-                    # Build a thin raw dict; normalize centrally.
+                # Cached tokens are a subset of input tokens (billed at a separate rate).
+                cached_i = 0
+                try:
+                    in_details = getattr(u, "input_tokens_details", None)
+                    if in_details is not None:
+                        cached_i = int(getattr(in_details, "cached_tokens", 0) or 0)
+                except Exception:
                     cached_i = 0
-                    try:
-                        in_details = getattr(u, "input_tokens_details", None)
-                        if in_details is not None:
-                            cached_i = int(getattr(in_details, "cached_tokens", 0) or 0)
-                    except Exception:
-                        cached_i = 0
 
-                    raw_usage: Dict[str, Any] = {
-                        "input_tokens": it,
-                        "output_tokens": ot,
-                        "total_tokens": tt,
-                        "cached_tokens": cached_i,
-                        "reasoning_tokens": reasoning,
-                    }
-                    return self._canonicalize_usage(raw_usage)
+                # Parse ints
+                try:
+                    input_total_i = int(it or 0)
+                except Exception:
+                    input_total_i = 0
+
+                if cached_i < 0:
+                    cached_i = 0
+                if cached_i > input_total_i:
+                    cached_i = input_total_i
+
+                prompt_uncached_i = input_total_i - cached_i
+                if prompt_uncached_i < 0:
+                    prompt_uncached_i = 0
+
+                try:
+                    output_i = int(ot or 0)
+                except Exception:
+                    output_i = 0
+                if output_i < 0:
+                    output_i = 0
+
+                # Reasoning tokens (reported only; do not infer if missing)
+                reasoning_i = 0
+                reasoning_reported = False
+                try:
+                    out_details = getattr(u, "output_tokens_details", None)
+                    if out_details is not None:
+                        r = getattr(out_details, "reasoning_tokens", None)
+                        if r is not None:
+                            reasoning_i = int(r or 0)
+                            if reasoning_i < 0:
+                                reasoning_i = 0
+                            reasoning_reported = True
+                except Exception:
+                    reasoning_i = 0
+                    reasoning_reported = False
+
+                # Visible answer tokens
+                if reasoning_reported:
+                    answer_i = output_i - reasoning_i
+                    if answer_i < 0:
+                        answer_i = 0
+                else:
+                    answer_i = output_i
+
+                # Total tokens
+                try:
+                    tt_i = int(tt or 0)
+                except Exception:
+                    tt_i = 0
+                if tt_i <= 0:
+                    tt_i = int(input_total_i + output_i)
+
+                # Return final schema fields PLUS temporary backward-compat fields (so nothing breaks yet)
+                return {
+                    # Final canonical fields
+                    "prompt_tokens": int(prompt_uncached_i),
+                    "cached_tokens": int(cached_i),
+                    "output_tokens": int(output_i),
+                    "reasoning_tokens": int(reasoning_i),
+                    "answer_tokens": int(answer_i),
+                    "total_tokens": int(tt_i),
+                    # Temporary backward-compat fields until other paths are refactored
+                    "input_tokens": int(input_total_i),
+                    "completion_tokens": int(output_i),
+                }
             except Exception:
                 return None
 
@@ -940,33 +1007,96 @@ class LLMAdapter:
                 pt = getattr(u, "prompt_tokens", None)
                 ct = getattr(u, "completion_tokens", None)
                 tt2 = getattr(u, "total_tokens", None)
-                
-                # Extract cached_content_tokens from prompt_tokens_details if present
+
+                # ---- Billing-safe normalization (OpenAI chat.completions) ----
+                # Provider reports:
+                #   prompt_tokens = total prompt tokens (may include cached)
+                #   completion_tokens = billed output tokens (answer + reasoning)
+                #   total_tokens = total billed (prompt + completion)
+                # completion_tokens_details.reasoning_tokens (if present) is a subset of completion_tokens.
+
+                # Extract cached tokens from prompt_tokens_details if present
                 cached_details = getattr(u, "prompt_tokens_details", None)
                 cc = None
                 if cached_details is not None:
                     cc = getattr(cached_details, "cached_tokens", None)
 
-                # Extract reasoning_tokens from completion_tokens_details if present
+                # Parse ints
+                try:
+                    pt_total_i = int(pt or 0)
+                except Exception:
+                    pt_total_i = 0
+
+                try:
+                    cached_i = int(cc or 0)
+                except Exception:
+                    cached_i = 0
+                if cached_i < 0:
+                    cached_i = 0
+                if cached_i > pt_total_i:
+                    cached_i = pt_total_i
+
+                prompt_uncached_i = pt_total_i - cached_i
+                if prompt_uncached_i < 0:
+                    prompt_uncached_i = 0
+
+                try:
+                    ct_total_i = int(ct or 0)
+                except Exception:
+                    ct_total_i = 0
+                if ct_total_i < 0:
+                    ct_total_i = 0
+
+                # Total tokens
+                try:
+                    tt_i = int(tt2 or 0)
+                except Exception:
+                    tt_i = 0
+
+                # Reasoning tokens (reported only; do not infer if missing)
                 reasoning_i = 0
+                reasoning_reported = False
                 try:
                     completion_tokens_details = getattr(u, "completion_tokens_details", None)
                     if completion_tokens_details is not None:
                         r = getattr(completion_tokens_details, "reasoning_tokens", None)
                         if r is not None:
                             reasoning_i = int(r or 0)
+                            if reasoning_i < 0:
+                                reasoning_i = 0
+                            reasoning_reported = True
                 except Exception:
                     reasoning_i = 0
+                    reasoning_reported = False
 
-                if pt is not None or ct is not None or tt2 is not None:
-                    raw_usage: Dict[str, Any] = {
-                        "prompt_tokens": pt,
-                        "completion_tokens": ct,
-                        "total_tokens": tt2,
-                        "cached_tokens": cc,
-                        "reasoning_tokens": reasoning_i,
-                    }
-                    return self._canonicalize_usage(raw_usage)
+                # Visible answer tokens
+                if reasoning_reported:
+                    answer_i = ct_total_i - reasoning_i
+                    if answer_i < 0:
+                        answer_i = 0
+                else:
+                    answer_i = ct_total_i
+
+                # Billed output tokens: OpenAI completion_tokens already matches billed output.
+                output_i = ct_total_i
+
+                # If total_tokens missing, compute it.
+                if tt_i <= 0:
+                    tt_i = int(pt_total_i + output_i)
+
+                # Return final schema fields PLUS temporary backward-compat fields (so nothing breaks yet)
+                return {
+                    # Final canonical fields
+                    "prompt_tokens": int(prompt_uncached_i),
+                    "cached_tokens": int(cached_i),
+                    "output_tokens": int(output_i),
+                    "reasoning_tokens": int(reasoning_i),
+                    "answer_tokens": int(answer_i),
+                    "total_tokens": int(tt_i),
+                    # Temporary backward-compat fields until other paths are refactored
+                    "input_tokens": int(pt_total_i),
+                    "completion_tokens": int(output_i),
+                }
             except Exception:
                 return None
         return None
@@ -985,47 +1115,113 @@ class LLMAdapter:
                 pt = u.get("prompt_tokens") if isinstance(u, dict) else getattr(u, "prompt_tokens", None)
                 ct = u.get("completion_tokens") if isinstance(u, dict) else getattr(u, "completion_tokens", None)
                 tt = u.get("total_tokens") if isinstance(u, dict) else getattr(u, "total_tokens", None)
-                
-                # Extract cached_content_tokens from prompt_tokens_details if present
+
+                # ---- Billing-safe normalization (Gemini OpenAI-compatible) ----
+                # Provider typically reports:
+                #   prompt_tokens = total prompt tokens (may include cached)
+                #   completion_tokens = visible answer tokens
+                #   total_tokens = total billed (prompt + answer + thoughts)
+                # We normalize to final schema:
+                #   prompt_tokens = non-cached prompt (normal-rate)
+                #   cached_tokens = cached prompt (cached-rate)
+                #   output_tokens = billed output (answer + reasoning) = total - prompt_total
+                #   answer_tokens = visible answer
+                #   reasoning_tokens = billed output - answer
+
+                # Extract cached tokens from prompt_tokens_details if present
                 cached_details = getattr(u, "prompt_tokens_details", None)
                 cc = None
                 if cached_details is not None:
                     cc = getattr(cached_details, "cached_tokens", None)
 
-                # Extract reasoning_tokens from completion_tokens_details if present
-                reasoning_i = 0
+                # Parse ints
+                try:
+                    pt_total_i = int(pt or 0)
+                except Exception:
+                    pt_total_i = 0
+
+                try:
+                    cached_i = int(cc or 0)
+                except Exception:
+                    cached_i = 0
+                if cached_i < 0:
+                    cached_i = 0
+                if cached_i > pt_total_i:
+                    cached_i = pt_total_i
+
+                prompt_uncached_i = pt_total_i - cached_i
+                if prompt_uncached_i < 0:
+                    prompt_uncached_i = 0
+
+                try:
+                    tt_i = int(tt or 0)
+                except Exception:
+                    tt_i = 0
+
+                # Visible answer (Gemini's completion_tokens)
+                try:
+                    answer_i = int(ct or 0)
+                except Exception:
+                    answer_i = 0
+                if answer_i < 0:
+                    answer_i = 0
+
+                # Billed output tokens
+                output_i = tt_i - pt_total_i
+                if output_i < 0:
+                    output_i = 0
+
+                # Reasoning/thought tokens are the remainder of billed output after visible answer.
+                reasoning_calc_i = output_i - answer_i
+                if reasoning_calc_i < 0:
+                    reasoning_calc_i = 0
+
+                # If provider ever explicitly reports reasoning inside completion_tokens_details (rare),
+                # prefer it ONLY if it is <= answer tokens (subset-of-answer semantics).
+                reasoning_final_i = reasoning_calc_i
                 try:
                     completion_tokens_details = getattr(u, "completion_tokens_details", None)
                     if completion_tokens_details is not None:
                         r = getattr(completion_tokens_details, "reasoning_tokens", None)
                         if r is not None:
-                            reasoning_i = int(r or 0)
+                            r_i = int(r or 0)
+                            if 0 <= r_i <= answer_i:
+                                # In this (OpenAI-like) case, completion includes reasoning; adjust answer accordingly.
+                                reasoning_final_i = r_i
+                                answer_i = max(answer_i - reasoning_final_i, 0)
                 except Exception:
-                    reasoning_i = 0
+                    pass
 
-                # Fallback (Gemini OpenAI-compatible nuance): total_tokens may include hidden "thought" tokens.
-                if reasoning_i == 0 and tt is not None and pt is not None and ct is not None:
-                    try:
-                        delta = int(tt or 0) - int(pt or 0) - int(ct or 0)
-                        if delta > 0:
-                            reasoning_i = int(delta)
-                    except Exception:
-                        pass
+                # If total_tokens missing, compute it
+                if tt_i <= 0:
+                    tt_i = int(pt_total_i + output_i)
 
-                if pt is not None or ct is not None or tt is not None:
-                    raw_usage: Dict[str, Any] = {
-                        "prompt_tokens": pt,
-                        "completion_tokens": ct,
-                        "total_tokens": tt,
-                        "cached_tokens": cc,
-                        "reasoning_tokens": reasoning_i,
-                    }
-                    return self._canonicalize_usage(raw_usage)
+                # Return final schema fields PLUS temporary backward-compat fields (so nothing breaks yet)
+                return {
+                    # Final canonical fields
+                    "prompt_tokens": int(prompt_uncached_i),
+                    "cached_tokens": int(cached_i),
+                    "output_tokens": int(output_i),
+                    "reasoning_tokens": int(reasoning_final_i),
+                    "answer_tokens": int(answer_i),
+                    "total_tokens": int(tt_i),
+                    # Temporary backward-compat fields until other paths are refactored
+                    "input_tokens": int(pt_total_i),
+                    "completion_tokens": int(answer_i),
+                }
             except Exception:
                 return None
                 
         elif endpoint == self.ENDPOINT_GEMINI_SDK:
-            # Gemini native SDK response (google-genai).
+            # Native SDK (google-genai) fields
+            # We normalize to final schema:
+            #   prompt_tokens = non-cached prompt (normal-rate)
+            #   cached_tokens = cached prompt (cached-rate)
+            #   answer_tokens = candidatesTokenCount
+            #   reasoning_tokens = thoughtsTokenCount
+            #   output_tokens = answer + reasoning
+            #   total_tokens = totalTokenCount
+
             try:
                 # Unwrap AdapterResponse if caller passed it
                 raw = resp
@@ -1060,39 +1256,74 @@ class LLMAdapter:
                         v = getattr(um, name_camel, None)
                     return v
 
-                # Native SDK (google-genai) snake_case fields
-                pt = _um_get("prompt_token_count", "promptTokenCount")
-                ct = _um_get("candidates_token_count", "candidatesTokenCount")
+                pt_total = _um_get("prompt_token_count", "promptTokenCount")
+                ans = _um_get("candidates_token_count", "candidatesTokenCount")
                 tt = _um_get("total_token_count", "totalTokenCount")
                 reasoning = _um_get("thoughts_token_count", "thoughtsTokenCount")
                 cc = _um_get("cached_content_token_count", "cachedContentTokenCount")
 
-                # Prefer native SDK fields directly when available.
-                out_i = None
+                # Parse ints safely
                 try:
-                    if ct is not None:
-                        out_i = int(ct or 0)
+                    pt_total_i = int(pt_total or 0)
                 except Exception:
-                    out_i = None
+                    pt_total_i = 0
 
-                if out_i is None:
-                    # Fallback: derive visible output tokens if candidatesTokenCount missing.
-                    try:
-                        out_i = int((tt or 0) - (pt or 0) - (reasoning or 0))
-                    except Exception:
-                        out_i = 0
-                    if out_i < 0:
-                        out_i = 0
+                try:
+                    cached_i = int(cc or 0)
+                except Exception:
+                    cached_i = 0
+                if cached_i < 0:
+                    cached_i = 0
+                if cached_i > pt_total_i:
+                    cached_i = pt_total_i
 
-                raw_usage: Dict[str, Any] = {
-                    "prompt_tokens": pt,
-                    "completion_tokens": int(out_i or 0),
-                    "total_tokens": tt,
-                    "cached_content_tokens": cc,
-                    "reasoning_tokens": reasoning,
+                prompt_uncached_i = pt_total_i - cached_i
+                if prompt_uncached_i < 0:
+                    prompt_uncached_i = 0
+
+                try:
+                    answer_i = int(ans or 0)
+                except Exception:
+                    answer_i = 0
+                if answer_i < 0:
+                    answer_i = 0
+
+                try:
+                    reasoning_i = int(reasoning or 0)
+                except Exception:
+                    reasoning_i = 0
+                if reasoning_i < 0:
+                    reasoning_i = 0
+
+                # Billed output tokens
+                output_i = answer_i + reasoning_i
+
+                # Total tokens
+                try:
+                    tt_i = int(tt or 0)
+                except Exception:
+                    tt_i = 0
+                if tt_i <= 0:
+                    tt_i = int(pt_total_i + output_i)
+
+                # If reported total is inconsistent, recompute (best-effort)
+                if tt_i != int(pt_total_i + output_i):
+                    tt_i = int(pt_total_i + output_i)
+
+                # Return final schema fields PLUS temporary backward-compat fields (so nothing breaks yet)
+                return {
+                    # Final canonical fields
+                    "prompt_tokens": int(prompt_uncached_i),
+                    "cached_tokens": int(cached_i),
+                    "output_tokens": int(output_i),
+                    "reasoning_tokens": int(reasoning_i),
+                    "answer_tokens": int(answer_i),
+                    "total_tokens": int(tt_i),
+                    # Temporary backward-compat fields until other paths are refactored
+                    "input_tokens": int(pt_total_i),
+                    "completion_tokens": int(output_i),
                 }
-                return self._canonicalize_usage(raw_usage)
-            except Exception as e:
+            except Exception:
                 return None
                 
         return None
@@ -2035,7 +2266,7 @@ class LLMAdapter:
         start_time = time.time()
         
         client = self._get_openai()
-        resolved_model = self._resolve_model_name(model)
+        resolved_model = self._resolve_provider_model_name(model)
         raw_response = client.embeddings.create(model=resolved_model, input=input, **kwargs)
         
         # Extract embedding vectors from OpenAI response
@@ -2096,7 +2327,7 @@ class LLMAdapter:
         )
 
     def _gemini_call(self, *, model: str, input: Any, stream: bool, skip_reasoning: bool = False, **kwargs: Any):
-        resolved_model = self._resolve_model_name(model)
+        resolved_model = self._resolve_provider_model_name(model)
         working_kwargs = self._prepare_gemini_adapter_kwargs(model, kwargs)
 
         # Extract canonical output token budget (create() writes max_output_tokens).
@@ -2396,7 +2627,7 @@ class LLMAdapter:
         start_time = time.time()
         
         client = self._get_gemini()
-        resolved_model = self._resolve_model_name(model)
+        resolved_model = self._resolve_provider_model_name(model)
 
         # Set default dimensions if not provided (matches common registry defaults).
         if "dimensions" not in kwargs:
@@ -2501,7 +2732,7 @@ class LLMAdapter:
         start_time = time.time()
         
         client = self._get_gemini_native()
-        resolved_model = self._resolve_model_name(model)
+        resolved_model = self._resolve_provider_model_name(model)
 
         contents = input if isinstance(input, list) else str(input)
 
