@@ -35,6 +35,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="text-embedding-3-small",
         endpoint="embeddings",
         pricing=Pricing(input_per_mm=0.02, output_per_mm=0.0),
+        param_policy={
+            "allowed": {"normalize_embedding", "dimensions"},
+            "disabled": {"include_thoughts", "output_dimensionality"}
+        },
         capabilities={
             "dimensions": 1536,
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
@@ -45,6 +49,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="text-embedding-3-large",
         endpoint="embeddings",
         pricing=Pricing(input_per_mm=0.13, output_per_mm=0.0),
+        param_policy={
+            "allowed": {"normalize_embedding", "dimensions"},
+            "disabled": {"include_thoughts", "output_dimensionality"}
+        },
         capabilities={
             "dimensions": 3072,
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
@@ -58,7 +66,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        param_policy={"disabled": {"reasoning_effort", "stream"}},
+        param_policy={
+            "allowed": {"max_output_tokens", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": {"reasoning_effort", "stream", "include_thoughts"}
+        },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
@@ -71,7 +82,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens":  2000
         },
-        param_policy={"disabled": {"reasoning_effort", "stream"}},
+        param_policy={
+            "allowed": {"max_output_tokens", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": {"reasoning_effort", "stream", "include_thoughts"}
+        },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
@@ -84,7 +98,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        param_policy={"disabled": {"reasoning_effort", "stream"}},
+        param_policy={
+            "allowed": {"max_output_tokens", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": {"reasoning_effort", "stream", "include_thoughts"}
+        },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
@@ -97,7 +114,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        param_policy={"disabled": {"reasoning_effort", "stream"}},
+        param_policy={
+            "allowed": {"max_output_tokens", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": {"reasoning_effort", "stream", "include_thoughts"}
+        },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
@@ -110,7 +130,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        param_policy={"disabled": {"stream", "temperature", "top_p"}},
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "reasoning", "tools", "tool_choice"},
+            "disabled": {"stream", "temperature", "top_p", "include_thoughts"}
+        },
         reasoning_policy={
             "mode": "openai_effort",
             "default": "low",
@@ -129,7 +152,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        param_policy={"disabled": {"stream", "temperature", "top_p"}},
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "reasoning", "tools", "tool_choice"},
+            "disabled": {"stream", "temperature", "top_p", "include_thoughts"}
+        },
         reasoning_policy={
             "mode": "openai_effort",
             "default": "minimal",
@@ -145,6 +171,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         model="gemini-embedding-001",
         endpoint="embed_content",
         pricing=Pricing(input_per_mm=0.10, output_per_mm=0.0),
+        param_policy={
+            "allowed": {"normalize_embedding", "dimensions", "task_type", "output_dimensionality"},
+            "disabled": set()
+        },
         capabilities={
             "assistant_role": "model", # Model Response Role  - will be used to send in Request for  conversation
             "dimensions": 1536,
@@ -160,7 +190,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        param_policy={"disabled": {"reasoning_effort"}},
+        param_policy={
+            "allowed": {"max_output_tokens", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
         thinking_tax={
             "effort_map": {
                 "none": {"reserve_ratio": 0.0},
@@ -182,7 +215,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        param_policy={},
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_thoughts", "thinking_level", "thinking_budget", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
         reasoning_policy={
             "mode": "gemini_level",
             "param": "thinking_level",
@@ -238,7 +274,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        param_policy={},
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_thoughts", "thinking_level", "thinking_budget", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
         reasoning_policy={
             "mode": "gemini_level",
             "param": "thinking_level",
@@ -293,7 +332,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        param_policy={},
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_thoughts", "thinking_level", "thinking_budget", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
         reasoning_policy={
             "mode": "gemini_budget",
             "param": "thinking_budget",
@@ -330,7 +372,10 @@ REGISTRY: Dict[str, ModelInfo] = {
         limits={
             "max_output_tokens": 2000
         },
-        param_policy={},
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_thoughts", "thinking_level", "thinking_budget", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
         reasoning_policy={
             "mode": "gemini_budget",
             "param": "thinking_budget",

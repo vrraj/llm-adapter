@@ -4,7 +4,7 @@
 ![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
 
-Registry-driven, extensible LLM routing and response normalization for generation and embeddings (**custom registry** overrides/extensions, explicit endpoint semantics, capability filtering, and parameter mapping).
+Registry-driven, extensible LLM routing and response normalization for generation and embeddings (**custom registry** overrides/extensions, explicit endpoint semantics, policy-driven parameter mapping, and pricing/limits).
 Install from **PyPI** for the core library, or clone from **GitHub** to run the demo UI and test scripts.
 
 
@@ -23,7 +23,7 @@ This package provides:
 - **Custom model registry** support (override/extend the defaults)
 - **Normalized response helper**: text, tool calls, reasoning tokens, and usage
 - **Registry-based pricing** metadata helpers
-- **ModelRegistry**: explicit endpoint routing (**OpenAI**: Responses, Chat Completions, Embeddings • **Gemini**: OpenAI-compatible endpoint, native SDK, embeddings)  model resolution, parameter mapping, and model policies (limits, pricing, reasoning/thinking)
+- **ModelRegistry**: explicit endpoint routing (**OpenAI**: Responses, Chat Completions, Embeddings • **Gemini**: OpenAI-compatible endpoint, native SDK generation, native SDK embeddings) + model resolution, parameter mapping, and model policies (limits, pricing, reasoning/thinking)
 - `ModelSpec`: reusable, typed configuration (structured alternative to kwargs)
 - **Streaming** supported at library level
 
@@ -34,7 +34,7 @@ This package provides:
 - **Python 3.10+** - Required for union type syntax (`|`) used in the code
   - Tested primarily on Python 3.10–3.12 (3.13 may work but depends on upstream SDK compatibility).
 - **pip** - Package installer (use `python3 -m pip` if `pip` not found)
-- **LLM API Keys** Currently Supported: OpenAI and Gemini models
+- **LLM API keys**: OpenAI and Gemini
 
 
 
@@ -166,7 +166,7 @@ pytest -m integration
   - `model_registry.py` — registry of supported model keys/capabilities/endpoints
   - `__init__.py` — exports `LLMAdapter`, `llm_adapter`, `LLMError`, `ModelSpec`, `model_registry`
 - `src/llm_adapter_demo/`
-  - `api.py` — FastAPI app exposing `/api/models` and `/api/chat`, plus mounting the UI under `/ui`
+  - `api.py` — FastAPI app exposing `/api/models` and `/api/chat`, plus mounting the UI under `/ui/`
   - `config.py` — environment checks + model options (derived from `llm_adapter.model_registry`)
 - `ui/`
   - `index.html` — minimal test UI for trying registry model keys
@@ -316,7 +316,10 @@ REGISTRY = {
             "assistant_role": "assistant",
             "reasoning_effort": True,
         },
-        param_policy={"disabled": {"stream", "temperature", "top_p"}},
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "reasoning", "tools", "tool_choice"},
+            "disabled": {"stream", "temperature", "top_p", "include_thoughts"}
+        },
         reasoning_policy={
             "mode": "openai_effort",
             "default": "low",
@@ -334,7 +337,10 @@ REGISTRY = {
             "assistant_role": "assistant",
             "reasoning_effort": True,
         },
-        param_policy={"disabled": {"stream", "temperature", "top_p"}},
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "reasoning", "tools", "tool_choice"},
+            "disabled": {"stream", "temperature", "top_p", "include_thoughts"}
+        },
         reasoning_policy={
             "mode": "openai_effort",
             "default": "minimal",
@@ -501,6 +507,56 @@ This standalone package uses these routing semantics:
 4. **Capability filtering (registry-driven)**
    - Drop known parameters that are explicitly unsupported for that model (e.g. `temperature`, `top_p`, `reasoning_effort`, `stream`, `tools`).
    - Unknown kwargs are generally passed through and may be accepted/rejected by the downstream SDK.
+
+## Parameter Validation System
+
+The LLM Adapter includes a **comprehensive parameter validation system** that ensures only valid parameters reach the provider APIs. This prevents cross-provider parameter contamination and API failures.
+
+### How Parameter Validation Works
+
+For each model in the registry, parameters are validated using three mechanisms:
+
+1. **`allowed` lists** - Explicitly define which provider-specific parameters are permitted
+2. **`disabled` lists** - Parameters to filter out (prevents cross-provider contamination)
+3. **`capabilities`** - Model-specific parameter support and defaults
+
+### Validation Flow
+
+1. **Remove disabled parameters** (e.g., Gemini params for OpenAI models)
+2. **Apply allowed list filtering** (only permitted provider-specific params)
+3. **Respect capabilities** (model-specific support and defaults)
+4. **Process adapter-level parameters** (e.g., `reasoning_effort` → provider format)
+
+### Example: Parameter Isolation
+
+```python
+# OpenAI model - Gemini parameters filtered out
+llm_adapter.create(
+    model="openai:gpt-4o-mini",
+    input="Hello",
+    temperature=0.7,           # ✅ Allowed
+    include_thoughts=True,    # ❌ Filtered out (Gemini-specific)
+    thinking_level="high"     # ❌ Filtered out (Gemini-specific)
+)
+# Result: Only temperature reaches OpenAI API
+
+# Gemini model - All parameters allowed
+llm_adapter.create(
+    model="gemini:openai-3-flash-preview",
+    input="Hello", 
+    temperature=0.7,           # ✅ Allowed
+    include_thoughts=True,    # ✅ Allowed (Gemini-specific)
+    thinking_level="high"     # ✅ Allowed (Gemini-specific)
+)
+# Result: All parameters processed correctly
+```
+
+### Benefits
+
+- **🛡️ API Safety**: Invalid parameters never reach provider APIs
+- **🔒 Provider Isolation**: Gemini parameters can't contaminate OpenAI calls
+- **🎯 Clear Documentation**: `allowed` lists show supported parameters explicitly
+- **🔄 Silent Protection**: Users don't see errors from parameter mismatches
 
 ## Capability Filtering System
 
@@ -744,7 +800,7 @@ When `stream=True`, `llm_adapter.create(...)` returns an **iterator**, not a nor
 - The included demo FastAPI `/api/chat` endpoint is designed for **non-streaming JSON** responses. Streaming is supported in Python via `create(stream=True)`; the demo UI uses non-streaming for simplicity.
 
 
->Use the CLI script `examples/test_streaming.py` to test streaming at the library level.
+>Use the CLI script `examples/streaming_call_example.py` to test streaming at the library level.
 
 **Usage Example:** `python examples/test_streaming.py --provider openai --model openai:gpt-4o-mini --prompt "explain quantum physics in less than 50 words"`
 
@@ -1025,6 +1081,8 @@ The demo API (`src/llm_adapter_demo/config.py`) serializes `ModelInfo` objects f
 - **All fields** are converted to JSON-serializable formats for browser compatibility
 
 This ensures the **LLM Adapter Interactive Playground** can display complete model information including pricing, capabilities, parameter restrictions, and real-time provider availability.
+
+For streaming examples, see `examples/streaming_call_example.py`.
 
 
 ## Examples

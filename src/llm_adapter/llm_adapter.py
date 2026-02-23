@@ -1533,7 +1533,7 @@ class LLMAdapter:
         out[p_name] = int(budget_i)
         return out
 
-    def _filter_kwargs_by_capabilities(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _apply_registry_param_policy(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         capabilities = self._get_model_capabilities(model)
         if not isinstance(kwargs, dict) or not kwargs:
             return kwargs
@@ -1576,14 +1576,35 @@ class LLMAdapter:
         except Exception:
             pass
 
+        # Extract allowed list if present
+        try:
+            allowed = policy.get("allowed") if isinstance(policy, dict) else None
+            if isinstance(allowed, (set, list, tuple)):
+                allowed_set = set(allowed)
+            else:
+                allowed_set = None
+        except Exception:
+            allowed_set = None
+
         token_params = {"max_output_tokens"}
 
         filtered: Dict[str, Any] = {}
         for param, value in kwargs.items():
+            # Always allow token params
             if param in token_params:
                 filtered[param] = value
                 continue
 
+            # If allowed list exists, only allow params in it OR in capabilities
+            if allowed_set is not None:
+                if param in allowed_set or param in capabilities:
+                    if param in capabilities and bool(capabilities.get(param)):
+                        filtered[param] = value
+                    elif param in allowed_set:
+                        filtered[param] = value
+                continue
+
+            # Fallback to original logic if no allowed list
             if param in capabilities:
                 if bool(capabilities.get(param)):
                     filtered[param] = value
@@ -1775,7 +1796,7 @@ class LLMAdapter:
         return out
 
     def _prepare_gemini_adapter_kwargs(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        filtered_kwargs = self._filter_kwargs_by_capabilities(model, kwargs)
+        filtered_kwargs = self._apply_registry_param_policy(model, kwargs)
         prepared_kwargs = self._apply_gemini_reasoning_policy(model, filtered_kwargs)
         prepared_kwargs = self._inject_gemini_thinking_config(model, prepared_kwargs)
 
@@ -2031,7 +2052,7 @@ class LLMAdapter:
     def _openai_call(self, *, model: str, input: Any, stream: bool, **kwargs: Any):
         client = self._get_openai()
         resolved_model = self._resolve_provider_model_name(model)
-        filtered_kwargs = self._filter_kwargs_by_capabilities(model, kwargs)
+        filtered_kwargs = self._apply_registry_param_policy(model, kwargs)
         mapped_kwargs = self._apply_openai_reasoning_policy(model, filtered_kwargs)
 
         # Canonical output token budget (set by create()); map to endpoint-specific param name later.
@@ -2244,7 +2265,7 @@ class LLMAdapter:
             raw=raw_response
         )
 
-    def _gemini_call(self, *, model: str, input: Any, stream: bool, skip_reasoning: bool = False, **kwargs: Any):
+    def _gemini_call(self, *, model: str, input: Any, stream: bool, **kwargs: Any):
         resolved_model = self._resolve_provider_model_name(model)
         working_kwargs = self._prepare_gemini_adapter_kwargs(model, kwargs)
 
@@ -2272,7 +2293,7 @@ class LLMAdapter:
             # Start from already-prepared kwargs so canonical token handling and thinking config stay consistent.
             sdk_kwargs: Dict[str, Any] = dict(working_kwargs or {}) if isinstance(working_kwargs, dict) else {}
             try:
-                sdk_kwargs = self._filter_kwargs_by_capabilities(model, sdk_kwargs)
+                sdk_kwargs = self._apply_registry_param_policy(model, sdk_kwargs)
                 sdk_kwargs = self._apply_gemini_reasoning_policy(model, sdk_kwargs)
             except Exception:
                 pass
@@ -2347,6 +2368,12 @@ class LLMAdapter:
             # Thinking config
             try:
                 tc_kwargs: Dict[str, Any] = {}
+                # If reasoning was requested via public knob, force include_thoughts=True
+                try:
+                    if kwargs.get("reasoning_effort") is not None or kwargs.get("debug_thoughts"):
+                        tc_kwargs["include_thoughts"] = True
+                except Exception:
+                    pass
                 if sdk_kwargs.get("include_thoughts") is not None:
                     tc_kwargs["include_thoughts"] = bool(sdk_kwargs.get("include_thoughts"))
                 if sdk_kwargs.get("thinking_budget") is not None:
@@ -2440,8 +2467,7 @@ class LLMAdapter:
 
                 text = self._extract_native_text_with_collapsed_thoughts(resp)
                 usage_dict = self._extract_gemini_response_usage(resp, self.ENDPOINT_GEMINI_SDK)
-                print(f"[DEBUG _gemini_call Native SDK] usage dict for AdapterResponse: {usage_dict}")
-
+            
                 
                 output_list = [
                     {

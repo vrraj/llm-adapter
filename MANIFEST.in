@@ -3,6 +3,9 @@ include LICENSE
 include .env.example
 include Makefile
 include pyproject.toml
+include MODEL_REGISTRY.md
+include ReleaseNotes.md
+recursive-include images *.png *.jpg *.jpeg *.gif *.svg
 
 recursive-include src *.py
 recursive-include ui *.html *.js *.css
