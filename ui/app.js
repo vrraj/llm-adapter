@@ -70,8 +70,20 @@ async function init() {
       processingStatus.style.fontWeight = "700";
     } else {
       processingStatus.textContent = statusText || "";
-      processingStatus.style.color = statusText ? "#6b7280" : ""; // gray for status
-      processingStatus.style.fontWeight = statusText ? "700" : "";
+      if (statusText) {
+        // Set color based on status content
+        if (statusText.toLowerCase().includes("incomplete")) {
+          processingStatus.style.color = "#800000"; // Maroon
+        } else if (statusText.toLowerCase().includes("complete")) {
+          processingStatus.style.color = "#008000"; // Green
+        } else {
+          processingStatus.style.color = "#6b7280"; // gray for other statuses
+        }
+        processingStatus.style.fontWeight = "700";
+      } else {
+        processingStatus.style.color = "";
+        processingStatus.style.fontWeight = "";
+      }
     }
   }
 

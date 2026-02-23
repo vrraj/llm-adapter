@@ -4,19 +4,28 @@
 ![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
 
-Registry-driven LLM routing and response normalization for generation and embeddings (explicit endpoint semantics, model capability filtering, and parameter mapping). 
+Registry-driven, extensible LLM routing and response normalization for generation and embeddings (**custom registry** overrides/extensions, explicit endpoint semantics, capability filtering, and parameter mapping).
 Install from **PyPI** for the core library, or clone from **GitHub** to run the demo UI and test scripts.
+
 
 GitHub: [https://github.com/vrraj/llm-adapter](https://github.com/vrraj/llm-adapter) • PyPI: [https://pypi.org/project/vrraj-llm-adapter/](https://pypi.org/project/vrraj-llm-adapter/)
 
+## LLM Adapter Interactive Playground
+
+![LLM Adapter Interactive Playground](images/llm_adapter_interactive_playground.png)
+
+The Interactive Playground allows for testing models (model registry keys), exposes model registry metadata, parameter controls, answer / response, reasoning tokens (if available), and provider-agnostic normalized responses in one interface.
+
+
 This package provides:
 
-- LLM **provider-agnostic** entrypoints for generation and embeddings
-- **Standardized response helper** with normalized access to response text, tool calls, and usage
+- **Provider-agnostic** entrypoints for LLM generation and embeddings (call by **registry key**)
+- **Custom model registry** support (override/extend the defaults)
+- **Normalized response helper**: text, tool calls, reasoning tokens (if available), and usage
 - **Registry-based pricing** metadata helpers
-- Explicit **endpoint routing** (Responses api, chat completions, embeddings, Gemini SDK, Gemini OpenAI API)
-- `ModelRegistry` for registry-driven model resolution, capability filtering, and parameter mapping
-- `ModelSpec` for reusable, typed configuration (structured alternative to passing kwargs)
+- Explicit **endpoint routing** (OpenAI Responses, Chat Completions, Embeddings; Gemini native SDK; Gemini OpenAI-compatible)
+- `ModelRegistry`: model resolution, capability filtering, and parameter mapping
+- `ModelSpec`: reusable, typed configuration (structured alternative to kwargs)
 - **Streaming** supported at library level
 
 >**Note:** Demo UI and helper scripts are available when running from source.
