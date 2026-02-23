@@ -80,7 +80,6 @@ def main() -> None:
         kwargs["top_p"] = float(args.top_p)
 
     print("=== llm_adapter.create(stream=True) ===")
-    print(f"provider: {provider}")
     print(f"model:    {args.model_key}")
     print(f"prompt:   {prompt}")
     if kwargs:
@@ -89,7 +88,6 @@ def main() -> None:
 
     try:
         resp = llm_adapter.create(
-            provider=provider,
             model=args.model_key,
             input=[{"role": "user", "content": prompt}],
             stream=True,

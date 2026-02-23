@@ -18,8 +18,7 @@ def test_magnitude_metadata():
     try:
         if os.getenv("OPENAI_API_KEY"):
             result = llm_adapter.embeddings.create(
-                provider="openai",
-                model="text-embedding-3-small",
+                model="openai:embed_small",
                 input="Test text for OpenAI magnitude metadata"
             )
             
@@ -43,8 +42,7 @@ def test_magnitude_metadata():
     try:
         if os.getenv("GEMINI_API_KEY"):
             result = llm_adapter.embeddings.create(
-                provider="gemini",
-                model="gemini-embedding-001",
+                model="gemini:native-embed",
                 input="Test text for Gemini magnitude metadata",
                 normalize_embedding=True
             )
@@ -69,8 +67,7 @@ def test_magnitude_metadata():
     try:
         if os.getenv("GEMINI_API_KEY"):
             result = llm_adapter.embeddings.create(
-                provider="gemini",
-                model="gemini-embedding-001", 
+                model="gemini:native-embed", 
                 input=["Text 1", "Text 2"],
                 normalize_embedding=True
             )

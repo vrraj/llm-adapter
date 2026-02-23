@@ -32,20 +32,19 @@ def main() -> None:
     if not api_key:
         print("[WARNING] OPENAI_API_KEY is not set; OpenAI calls will fail.")
 
-    model = os.getenv("TEST_EMBEDDING_MODEL", "text-embedding-3-small")
+    model = os.getenv("TEST_EMBEDDING_MODEL", "openai:embed_small")
     text = get_text_from_argv().strip()
     if not text:
         print("[ERROR] Empty text; nothing to embed.")
         sys.exit(1)
 
-    print("=== llm_adapter.embeddings.create (provider='openai') ===")
+    print("=== llm_adapter.embeddings.create (model registry key) ===")
     print(f"Model: {model}")
     print(f"Text: {text}")
     print("----------------------------------------")
 
     try:
         resp = llm_adapter.embeddings.create(
-            provider="openai",
             model=model,
             input=text,
         )

@@ -71,9 +71,7 @@ python test_llm_adapter.py
 ```python
 from llm_adapter import llm_adapter
 
-# Chat
-#### Registry-key pattern (recommended)
-
+# Chat - Registry-key pattern (recommended)
 resp = llm_adapter.create(
     model="openai:gpt-4o-mini",  # Registry key - provider inferred
     input=[{"role": "user", "content": "Hello"}],
@@ -83,9 +81,9 @@ print("Chat Response (includes reasoning tokens):")
 print(resp.output_text)
 print(f"Usage: {getattr(resp, 'usage', 'Usage info not available')}")
 
-# Embeddings
+# Embeddings - Registry-key pattern (recommended)
 emb_resp = llm_adapter.create_embedding(
-    model="openai:embed_small",  # key in model registry
+    model="openai:embed_small",  # Registry key - provider inferred
     input=["Hello world", "How are you?", "This is a test"]
 )
 print("Embedding Response:")
@@ -130,8 +128,24 @@ If you want to run the test suite:
 # Install with dev dependencies (includes pytest)
 pip install -e ".[dev]"
 
-# Run tests
+# Run unit tests only (no API keys required)
+pytest tests/unit/
+
+# Run integration tests (requires API keys)
+pytest tests/integration/
+
+# Run all tests
 pytest
+```
+
+**Test Structure:**
+- **Unit tests** (`tests/unit/`): Fast tests that validate core functionality without API calls
+- **Integration tests** (`tests/integration/): Full API tests that require valid API keys
+
+By default, pytest is configured to skip integration tests unless explicitly requested. Run integration tests with:
+
+```bash
+pytest -m integration
 ```
 
 ## Project structure
@@ -151,10 +165,25 @@ pytest
   - `app.js` — frontend wiring to `/api/models` and `/api/chat`
   - `styles.css` — simple styling
 - `examples/`
-  - `test_openai_chat.py` — CLI example calling `llm_adapter.create` for OpenAI chat
-  - `test_openai_embeddings.py` — CLI example calling `llm_adapter.create_embedding` for OpenAI embeddings
-  - `test_streaming.py` — CLI example calling `llm_adapter.create(stream=True)` and printing deltas as they arrive
+  - `openai_adapter_example.py` — CLI example calling `llm_adapter.create` for OpenAI chat
+  - `openai_embedding_example.py` — CLI example calling `llm_adapter.create_embedding` for OpenAI embeddings
+  - `streaming_call_example.py` — CLI example calling `llm_adapter.create(stream=True)` and printing deltas as they arrive
+  - `setting_openai_base_url.py` — Example showing how to configure custom OpenAI base URL
+  - `get_model_pricing_example.py` — Example for retrieving model pricing information
+  - `set_adapter_allowed_models.py` — Example for configuring model allowlists
+  - `custom_registry.py` — Template for creating custom model registries
+  - `import_custom_registry.py` — Example demonstrating custom registry usage
   - `test_model_spec.py` — Comprehensive test script demonstrating ModelSpec usage with different providers and parameter configurations
+  - `test_magnitude_metadata.py` — Example showing magnitude metadata for embeddings
+  - `test_provider_agnostic_embeddings.py` — Example demonstrating provider auto-detection
+- `tests/`
+  - `unit/` — Unit tests that don't require API keys
+    - `test_imports.py` — Basic package import validation
+  - `integration/` — Integration tests that require API keys
+    - `test_llm_adapter.py` — Basic chat and embeddings integration tests
+    - `test_adapter_embedding_calls.py` — Advanced embedding functionality tests
+    - `test_gemini_tool_calls_flow.py` — Gemini tool calling integration tests
+    - `test_openai_tool_calls_flow.py` — OpenAI tool calling integration tests
 
 
 ## Architecture and design notes
@@ -962,86 +991,108 @@ The UI/API supports additional inference parameters:
 When `reasoning_effort` is set for a reasoning-capable Gemini model, the handler requests thoughts via `include_thoughts` and the UI displays both **Reasoning** and **Answer** separately.
 
 
-## CLI examples
+## Examples
 
-The `examples/` folder contains simple scripts that exercise the handler directly.
+The `examples/` folder contains practical scripts that demonstrate how to use the llm-adapter library. These examples are designed to be learning resources and starting points for your own applications.
 
 **Prerequisite**: Install the package (via PyPI or `pip install -e .` if running from source).
 
-### OpenAI calls via llm_adapter
-From the repository root directory:
+### Basic Usage Examples
 
+#### OpenAI Chat Example
 ```bash
-python3 examples/test_openai_chat.py "Say hello from standalone vrraj-llm-adapter"
+python examples/openai_adapter_example.py "Say hello from llm-adapter"
 ```
 
-The script will:
+Demonstrates basic chat completion using the registry key pattern.
 
-- Import `vrraj-llm-adapter` from the installed package.
-- Call `llm_adapter.create(provider="openai", model="openai:fast", input=..., stream=False)`.
-  - Print the response text and best-effort token usage if available.
-
-### OpenAI embeddings via llm_adapter
-
-From the repository root directory:
+#### OpenAI Embeddings Example
 ```bash
-python3 examples/test_openai_embeddings.py "Embed this text via llm_adapter"
-
+python examples/openai_embedding_example.py "Embed this text via llm-adapter"
 ```
 
-You can override the embedding model via `TEST_EMBEDDING_MODEL` (defaults to `text-embedding-3-small` - direct model name).
-The script will:
+Shows how to generate embeddings using registry keys.
 
-- Call `llm_adapter.create_embedding(provider="openai", model=..., input=...)`.
-- Print the embedding vector and usage information.
-
-### Streaming via llm_adapter (OpenAI or Gemini)
-
+#### Streaming Example
 ```bash
+# OpenAI streaming
 export OPENAI_API_KEY="..."
-python3 examples/test_streaming.py --model-key openai:fast --prompt "seattle attractions" --max-output-tokens 200
-```
+python examples/streaming_call_example.py --model-key openai:gpt-4o-mini --prompt "seattle attractions" --max-output-tokens 200
 
-```bash
+# Gemini streaming
 export GEMINI_API_KEY="..."
-export GEMINI_OPENAI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai/"
-python3 examples/test_streaming.py --model-key gemini:native-sdk-3-flash-preview --prompt "seattle attractions" --max-output-tokens 200
+python examples/streaming_call_example.py --model-key gemini:native-sdk-3-flash-preview --prompt "seattle attractions" --max-output-tokens 200
 ```
 
-### ModelSpec configuration testing
+Demonstrates real-time streaming responses.
 
-From the repository root directory:
+### Configuration Examples
+
+#### Custom Base URL
 ```bash
-python3 examples/test_model_spec.py
+python examples/setting_openai_base_url.py
 ```
 
-The script will:
-- Test ModelSpec usage with different providers (OpenAI, Gemini)
-- Demonstrate parameter configurations (basic, extra, extra_body)
-- Show ModelSpec reusability and validation
-- Test both chat completions and embeddings with ModelSpec
+Shows how to configure custom OpenAI endpoints (useful for proxies, gateways, or self-hosted setups).
 
-### Additional Testing Examples
+#### Model Pricing Lookup
+```bash
+# Get pricing for a specific model
+python examples/get_model_pricing_example.py openai:gpt-4o-mini
 
-The `examples/` directory contains several test scripts for different scenarios:
+# List all available models
+python examples/get_model_pricing_example.py
+```
 
+Demonstrates how to access pricing metadata from the model registry.
+
+#### Model Allowlist Configuration
+```bash
+python examples/set_adapter_allowed_models.py
+```
+
+Shows how to restrict which models can be used for security and control.
+
+### Advanced Examples
+
+#### Custom Registry
 ```bash
 # Test custom registry integration
-python3 examples/import_custom_registry.py
-
-# Test custom base URL functionality
-python3 examples/test_openai_base_url.py
-
-# Test magnitude metadata for embeddings
-python3 examples/test_magnitude_metadata.py
-
-# Test provider-agnostic embeddings
-python3 examples/test_provider_agnostic_embeddings.py
+python examples/import_custom_registry.py
 ```
 
-These scripts demonstrate specific features and can serve as integration tests or usage examples.
+Demonstrates how to create and use custom model registries.
 
-Note: API key errors are expected without valid credentials, but the script structure validates ModelSpec functionality.
+#### ModelSpec Configuration
+```bash
+python examples/test_model_spec.py
+```
+
+Comprehensive example showing ModelSpec usage with different providers and parameter configurations.
+
+#### Magnitude Metadata
+```bash
+python examples/test_magnitude_metadata.py
+```
+
+Shows how to work with embedding magnitude metadata and normalization.
+
+#### Provider-Agnostic Embeddings
+```bash
+python examples/test_provider_agnostic_embeddings.py
+```
+
+Demonstrates automatic provider detection from registry keys.
+
+### Key Features Demonstrated
+
+- **Registry-driven model selection** - Use keys like `"openai:gpt-4o-mini"` instead of provider-specific configs
+- **Provider auto-detection** - The adapter automatically determines the provider from registry keys
+- **Capability filtering** - Parameters are automatically filtered based on model capabilities
+- **Streaming support** - Real-time response streaming for compatible models
+- **Custom configurations** - Base URLs, registries, and model allowlists
+- **Pricing metadata** - Access to cost information for different models
+- **Type safety** - ModelSpec provides structured, reusable configurations
 
 ## Supported Providers
 

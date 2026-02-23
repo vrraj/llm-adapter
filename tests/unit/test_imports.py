@@ -1,4 +1,7 @@
 """Test package imports and basic functionality for CI validation."""
+import pytest
+
+@pytest.mark.unit
 
 def test_package_import():
     """Test that package can be imported correctly."""

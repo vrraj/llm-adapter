@@ -37,15 +37,14 @@ def main() -> None:
         print("[ERROR] Empty prompt; nothing to send.")
         sys.exit(1)
 
-    print("=== llm_adapter.create (provider='openai') ===")
-    print("Model: gpt-4o-mini")
+    print("=== llm_adapter.create (model='openai:gpt-4o-mini') ===")
+    print("Model: openai:gpt-4o-mini")
     print(f"Prompt: {prompt}")
     print("----------------------------------------")
 
     try:
         resp = llm_adapter.create(
-            provider="openai",
-            model="gpt-4o-mini",
+            model="openai:gpt-4o-mini",
             input=prompt,
             stream=False,
         )
