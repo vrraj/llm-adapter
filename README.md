@@ -21,9 +21,9 @@ This package provides:
 
 - **Provider-agnostic** entrypoints for LLM generation and embeddings (call by **registry key**)
 - **Custom model registry** support (override/extend the defaults)
-- **Normalized response helper**: text, tool calls, reasoning tokens (if available), and usage
+- **Normalized response helper**: text, tool calls, reasoning tokens, and usage
 - **Registry-based pricing** metadata helpers
-- `ModelRegistry`: explicit endpoint routing (**OpenAI** - responses API, chat completions and embeddings; **Gemini** - openai adapter API, gemini sdk and embeddings) + model resolution, capability filtering, and parameter mapping
+- **ModelRegistry**: explicit endpoint routing (**OpenAI**: Responses, Chat Completions, Embeddings • **Gemini**: OpenAI-compatible endpoint, native SDK, embeddings)  model resolution, parameter mapping, and model policies (limits, pricing, reasoning/thinking)
 - `ModelSpec`: reusable, typed configuration (structured alternative to kwargs)
 - **Streaming** supported at library level
 
