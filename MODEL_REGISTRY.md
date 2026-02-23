@@ -19,6 +19,10 @@ REGISTRY = {
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=0.30, output_per_mm=1.20),
         capabilities={"assistant_role": "assistant"},
+        param_policy={
+            "allowed": {"max_output_tokens", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": {"reasoning_effort", "stream", "include_thoughts"}
+        },
     ),
     
     "gemini:my-reasoning-model": ModelInfo(
@@ -27,6 +31,10 @@ REGISTRY = {
         endpoint="chat_completions",
         pricing=Pricing(input_per_mm=0.25, output_per_mm=1.50),
         capabilities={"reasoning_effort": True},
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_thoughts", "thinking_level", "thinking_budget", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
         reasoning_policy={
             "mode": "gemini_level",
             "param": "thinking_level",
@@ -130,9 +138,58 @@ adapter = LLMAdapter(
 | | | `chat_completions` = OpenAI Chat Completions **OR** Gemini OpenAI-compatible endpoint |
 | | | `gemini_sdk` = Gemini native SDK (generation or embeddings) |
 | `pricing` | Cost information | `Pricing(input_per_mm=0.15, output_per_mm=0.60)` |
-| `param_policy` | Parameter restrictions | `{"disabled": {"stream"}}` |
+| `param_policy` | Parameter restrictions | `{"allowed": {...}, "disabled": {...}}` |
 | `capabilities` | Model features | `{"reasoning_effort": True}` |
 | `reasoning_policy` | Reasoning config | `{"mode": "gemini_level", "default": "low"}` |
+
+## 🛡️ Parameter Validation System
+
+The model registry includes a **comprehensive parameter validation system** that ensures only valid parameters reach the provider APIs.
+
+### Parameter Policy Structure
+
+Each model can define a `param_policy` with two components:
+
+```python
+param_policy={
+    "allowed": {"max_output_tokens", "temperature", "top_p"},  # Permitted provider params
+    "disabled": {"reasoning_effort", "include_thoughts"}     # Filtered out params
+}
+```
+
+### Validation Rules
+
+1. **`allowed` lists** - Only these provider-specific parameters can reach the API
+2. **`disabled` lists** - These parameters are always filtered out
+3. **Framework parameters** (`model`, `input`, `messages`, `stream`) are never in `allowed` lists
+4. **`reasoning_effort`** - Never disabled for models with `reasoning_policy`
+
+### Example: Provider Isolation
+
+```python
+# OpenAI model - Gemini parameters blocked
+"openai:gpt-4o-mini": ModelInfo(
+    param_policy={
+        "allowed": {"max_output_tokens", "temperature", "top_p"},
+        "disabled": {"reasoning_effort", "include_thoughts", "thinking_level"}
+    }
+)
+
+# Gemini model - Full Gemini support
+"gemini:openai-3-flash-preview": ModelInfo(
+    param_policy={
+        "allowed": {"max_output_tokens", "reasoning_effort", "include_thoughts", "thinking_level"},
+        "disabled": set()
+    }
+)
+```
+
+### Benefits
+
+- **🔒 Provider Isolation**: Gemini parameters can't reach OpenAI APIs
+- **🛡️ API Safety**: Invalid parameters are filtered out automatically
+- **🎯 Clear Documentation**: `allowed` lists show supported parameters explicitly
+- **🔄 Silent Protection**: Users don't see errors from parameter mismatches
 
 ### 🔧 Environment Variables
 
@@ -169,6 +226,28 @@ validate_registry(REGISTRY)  # ✅ Do this
 )
 ```
 
+#### **❌ Don't: Disable reasoning_effort for Reasoning Models**
+```python
+# Wrong - reasoning_effort won't work for reasoning models
+"openai:reasoning_o3-mini": ModelInfo(
+    param_policy={"disabled": {"reasoning_effort"}}  # ❌ Wrong
+)
+
+# Correct - reasoning_effort is consumed by reasoning_policy
+"openai:reasoning_o3-mini": ModelInfo(
+    param_policy={"disabled": {"temperature", "top_p"}}  # ✅ Correct
+)
+```
+
+#### **❌ Don't: Include Framework Parameters in allowed**
+```python
+# Wrong - framework params don't go through filtering
+param_policy={"allowed": {"model", "input", "temperature"}}  # ❌ Wrong
+
+# Correct - only provider-specific parameters
+param_policy={"allowed": {"temperature", "top_p"}}  # ✅ Correct
+```
+
 ### ✅ Best Practices Checklist
 
 - [ ] **Use registry key format**: `{provider}:{model}`
@@ -177,6 +256,9 @@ validate_registry(REGISTRY)  # ✅ Do this
 - [ ] **Document custom models**: Add comments explaining special configurations
 - [ ] **Test model access**: Verify custom models work before deployment
 - [ ] **Check pricing**: Ensure cost information is accurate
+- [ ] **Configure param_policy**: Set `allowed` and `disabled` lists for each model
+- [ ] **Don't disable reasoning_effort**: For models with `reasoning_policy`
+- [ ] **Exclude framework params**: Don't put `model`, `input`, `messages`, `stream` in `allowed`
 
 ### 📚 Next Steps
 
