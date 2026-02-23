@@ -144,73 +144,7 @@ class LLMAdapter:
         except Exception:
             return None
 
-    def _canonicalize_usage(self, raw: Optional[Dict[str, Any]]) -> Optional[Dict[str, int]]:
-        """Normalize provider usage dict into a canonical schema.
-
-        Always returns canonical keys:
-          input_tokens, output_tokens, total_tokens, cached_tokens, reasoning_tokens
-        And keeps legacy aliases for backward-compat:
-          prompt_tokens, completion_tokens
-
-        This helper is intentionally provider-agnostic; provider-specific nuances
-        (e.g., Gemini hidden-thought deltas) should be applied before calling it.
-        """
-        try:
-            if not isinstance(raw, dict) or not raw:
-                return None
-
-            # Accept either canonical or legacy keys.
-            it = raw.get("input_tokens")
-            if it is None:
-                it = raw.get("prompt_tokens")
-
-            ot = raw.get("output_tokens")
-            if ot is None:
-                ot = raw.get("completion_tokens")
-
-            tt = raw.get("total_tokens")
-
-            ct = raw.get("cached_tokens")
-            if ct is None:
-                ct = raw.get("cached_content_tokens")
-
-            rt = raw.get("reasoning_tokens")
-
-            at = raw.get("answer_tokens")
-
-            in_i = int(it or 0)
-            out_i = int(ot or 0)
-            cached_i = int(ct or 0)
-            reason_i = int(rt or 0)
-            answer_i = int(at or 0)
-
-            # Total tokens: prefer explicit value; otherwise default to input+output.
-            if tt is None:
-                total_i = int(in_i + out_i)
-            else:
-                total_i = int(tt or 0)
-
-            # Clamp reasoning to non-negative.
-            # NOTE: For some providers (e.g., Gemini native SDK), reasoning/thought tokens are
-            # reported separately and may exceed visible output tokens, so do not clamp to output.
-            if reason_i < 0:
-                reason_i = 0
-
-            out: Dict[str, int] = {
-                # Canonical
-                "input_tokens": in_i,
-                "output_tokens": out_i,
-                "total_tokens": total_i,
-                "cached_tokens": cached_i,
-                "reasoning_tokens": reason_i,
-                "answer_tokens": answer_i,
-                # Legacy aliases
-                "prompt_tokens": in_i,
-                "completion_tokens": out_i,
-            }
-            return out
-        except Exception:
-            return None
+    
     """Unified LLM interface supporting multiple providers."""
 
     def __init__(
@@ -271,12 +205,11 @@ class LLMAdapter:
         self.embeddings = _EmbeddingsFacade(self)
 
     class LLMUsage(TypedDict, total=False):
-        input_tokens: int
+        prompt_tokens: int
         cached_tokens: int
         output_tokens: int
         reasoning_tokens: int
         answer_tokens: int
-        completion_tokens: int
         total_tokens: int
 
     class LLMToolCall(TypedDict, total=False):
@@ -461,53 +394,51 @@ class LLMAdapter:
 
             # Usage: AdapterResponse.usage is canonicalized at source (provider wrappers).
             usage: LLMAdapter.LLMUsage = {
-                "input_tokens": 0,
+                "prompt_tokens": 0,
                 "cached_tokens": 0,
                 "output_tokens": 0,
                 "reasoning_tokens": 0,
                 "answer_tokens": 0,
-                "completion_tokens": 0,
                 "total_tokens": 0,
             }
 
             try:
                 u = ar.usage if isinstance(ar.usage, dict) else None
                 if isinstance(u, dict) and u:
-                    it = u.get("input_tokens")
-                    ot = u.get("output_tokens")
-                    rt = u.get("reasoning_tokens")
-                    ct = u.get("cached_tokens")
-                    tt = u.get("total_tokens")
-                    comp = u.get("completion_tokens")
-                    ans = u.get("answer_tokens")
-
-                    usage["input_tokens"] = int(it or 0)
-                    usage["output_tokens"] = int(ot or 0)
-                    usage["reasoning_tokens"] = int(rt or 0)
-                    usage["cached_tokens"] = int(ct or 0)
-
-                    if tt is None:
-                        usage["total_tokens"] = int(usage["input_tokens"] + usage["output_tokens"])
-                    else:
-                        usage["total_tokens"] = int(tt or 0)
-
-                    # completion_tokens is a legacy alias for output_tokens (NOT answer-only).
+                    # prompt_tokens is non-cached prompt (normal-rate)
                     try:
-                        if comp is not None:
-                            usage["completion_tokens"] = int(comp or 0)
-                        else:
-                            usage["completion_tokens"] = int(usage["output_tokens"])
+                        usage["prompt_tokens"] = int(u.get("prompt_tokens") or 0)
                     except Exception:
-                        usage["completion_tokens"] = int(usage["output_tokens"])
+                        usage["prompt_tokens"] = 0
 
-                    # answer_tokens is the visible/non-reasoning portion of the output.
                     try:
-                        if ans is not None:
-                            usage["answer_tokens"] = int(ans or 0)
-                        else:
-                            usage["answer_tokens"] = max(int(usage["output_tokens"]) - int(usage["reasoning_tokens"]), 0)
+                        usage["cached_tokens"] = int(u.get("cached_tokens") or 0)
                     except Exception:
-                        usage["answer_tokens"] = max(int(usage["output_tokens"]) - int(usage["reasoning_tokens"]), 0)
+                        usage["cached_tokens"] = 0
+
+                    try:
+                        usage["output_tokens"] = int(u.get("output_tokens") or 0)
+                    except Exception:
+                        usage["output_tokens"] = 0
+
+                    try:
+                        usage["reasoning_tokens"] = int(u.get("reasoning_tokens") or 0)
+                    except Exception:
+                        usage["reasoning_tokens"] = 0
+
+                    try:
+                        usage["answer_tokens"] = int(u.get("answer_tokens") or 0)
+                    except Exception:
+                        usage["answer_tokens"] = 0
+
+                    # total_tokens: prefer explicit value; if missing, compute best-effort.
+                    try:
+                        if u.get("total_tokens") is not None:
+                            usage["total_tokens"] = int(u.get("total_tokens") or 0)
+                        else:
+                            usage["total_tokens"] = int(usage["prompt_tokens"] + usage["cached_tokens"] + usage["output_tokens"])
+                    except Exception:
+                        usage["total_tokens"] = int(usage["prompt_tokens"] + usage["cached_tokens"] + usage["output_tokens"])
             except Exception:
                 pass
 
@@ -983,18 +914,14 @@ class LLMAdapter:
                 if tt_i <= 0:
                     tt_i = int(input_total_i + output_i)
 
-                # Return final schema fields PLUS temporary backward-compat fields (so nothing breaks yet)
+                # Return final schema fields only (remove backward-compat fields)
                 return {
-                    # Final canonical fields
                     "prompt_tokens": int(prompt_uncached_i),
                     "cached_tokens": int(cached_i),
                     "output_tokens": int(output_i),
                     "reasoning_tokens": int(reasoning_i),
                     "answer_tokens": int(answer_i),
                     "total_tokens": int(tt_i),
-                    # Temporary backward-compat fields until other paths are refactored
-                    "input_tokens": int(input_total_i),
-                    "completion_tokens": int(output_i),
                 }
             except Exception:
                 return None
@@ -1084,18 +1011,14 @@ class LLMAdapter:
                 if tt_i <= 0:
                     tt_i = int(pt_total_i + output_i)
 
-                # Return final schema fields PLUS temporary backward-compat fields (so nothing breaks yet)
+                # Return final schema fields only (remove backward-compat fields)
                 return {
-                    # Final canonical fields
                     "prompt_tokens": int(prompt_uncached_i),
                     "cached_tokens": int(cached_i),
                     "output_tokens": int(output_i),
                     "reasoning_tokens": int(reasoning_i),
                     "answer_tokens": int(answer_i),
                     "total_tokens": int(tt_i),
-                    # Temporary backward-compat fields until other paths are refactored
-                    "input_tokens": int(pt_total_i),
-                    "completion_tokens": int(output_i),
                 }
             except Exception:
                 return None
@@ -1196,18 +1119,14 @@ class LLMAdapter:
                 if tt_i <= 0:
                     tt_i = int(pt_total_i + output_i)
 
-                # Return final schema fields PLUS temporary backward-compat fields (so nothing breaks yet)
+                # Return final schema fields only (remove backward-compat fields)
                 return {
-                    # Final canonical fields
                     "prompt_tokens": int(prompt_uncached_i),
                     "cached_tokens": int(cached_i),
                     "output_tokens": int(output_i),
                     "reasoning_tokens": int(reasoning_final_i),
                     "answer_tokens": int(answer_i),
                     "total_tokens": int(tt_i),
-                    # Temporary backward-compat fields until other paths are refactored
-                    "input_tokens": int(pt_total_i),
-                    "completion_tokens": int(answer_i),
                 }
             except Exception:
                 return None
@@ -1310,18 +1229,14 @@ class LLMAdapter:
                 if tt_i != int(pt_total_i + output_i):
                     tt_i = int(pt_total_i + output_i)
 
-                # Return final schema fields PLUS temporary backward-compat fields (so nothing breaks yet)
+                # Return final schema fields only (remove backward-compat fields)
                 return {
-                    # Final canonical fields
                     "prompt_tokens": int(prompt_uncached_i),
                     "cached_tokens": int(cached_i),
                     "output_tokens": int(output_i),
                     "reasoning_tokens": int(reasoning_i),
                     "answer_tokens": int(answer_i),
                     "total_tokens": int(tt_i),
-                    # Temporary backward-compat fields until other paths are refactored
-                    "input_tokens": int(pt_total_i),
-                    "completion_tokens": int(output_i),
                 }
             except Exception:
                 return None

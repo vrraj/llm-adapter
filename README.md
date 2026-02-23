@@ -7,14 +7,14 @@
 Registry-driven LLM routing and response normalization for generation and embeddings (explicit endpoint semantics, model capability filtering, and parameter mapping). 
 Install from **PyPI** for the core library, or clone from **GitHub** to run the demo UI and test scripts.
 
-GitHub: https://github.com/vrraj/llm-adapter • PyPI: https://pypi.org/project/vrraj-llm-adapter/
+GitHub: [https://github.com/vrraj/llm-adapter](https://github.com/vrraj/llm-adapter) • PyPI: [https://pypi.org/project/vrraj-llm-adapter/](https://pypi.org/project/vrraj-llm-adapter/)
 
 This package provides:
 
 - LLM **provider-agnostic** entrypoints for generation and embeddings
 - **Standardized response helper** with normalized access to response text, tool calls, and usage
 - **Registry-based pricing** metadata helpers
-- Explicit **endpoint routing** (Responses api, chat completions, embeddings, Gemini SDK, Genini OpenAI API)
+- Explicit **endpoint routing** (Responses api, chat completions, embeddings, Gemini SDK, Gemini OpenAI API)
 - `ModelRegistry` for registry-driven model resolution, capability filtering, and parameter mapping
 - `ModelSpec` for reusable, typed configuration (structured alternative to passing kwargs)
 - **Streaming** supported at library level
@@ -72,12 +72,14 @@ python test_llm_adapter.py
 from llm_adapter import llm_adapter
 
 # Chat
+#### Registry-key pattern (recommended)
+
 resp = llm_adapter.create(
-    model="openai:gpt-4o-mini",  # key in model registry
+    model="openai:gpt-4o-mini",  # Registry key - provider inferred
     input=[{"role": "user", "content": "Hello"}],
     max_output_tokens=200,
 )
-print("Chat Response:")
+print("Chat Response (includes reasoning tokens):")
 print(resp.output_text)
 print(f"Usage: {getattr(resp, 'usage', 'Usage info not available')}")
 
@@ -103,7 +105,7 @@ git clone https://github.com/vrraj/llm-adapter.git
 cd llm-adapter
 bash scripts/llm_adapter_setup.sh
 ```
->This script (scripts/llm_adapter_setup.sh) checks prerequisites (`python3`, `make`), creates `.env` if missing, sets up a local `.venv`, installs the package (`pip install -e .`), and shows **next steps*. The demo UI and FastAPI server run in this `.venv` virtual environmen. Safe to run multiple times.
+>This script (scripts/llm_adapter_setup.sh) checks prerequisites (`python3`, `make`), creates `.env` if missing, sets up a local `.venv`, installs the package (`pip install -e .`), and shows **next steps**. The demo UI and FastAPI server run in this `.venv` virtual environment. Safe to run multiple times.
 
 2. Set required API keys (see **Environment variables** section below).
 
@@ -242,10 +244,10 @@ The LLM Adapter includes an **interactive demo UI** that allows you to test cust
    ```bash
    cd llm-adapter
    source .venv/bin/activate  # or activate your venv
-   python -m uvicorn src.llm_adapter_demo.api:app --reload --host 0.0.0.0 --port 8000
+   uvicorn llm_adapter_demo.api:app --reload --host 0.0.0.0 --port 8100
    ```
 
-2. **Open the UI:** Navigate to `http://localhost:8000/ui`
+2. **Open the UI:** Navigate to `http://localhost:8100/ui`
 
 3. **Enable custom registry:** Check the "Merge custom registry (examples/custom_registry.py)" checkbox
 
@@ -702,7 +704,7 @@ print(f"Usage: {resp.usage}")
 When `stream=True`, `llm_adapter.create(...)` returns an **iterator**, not a normal JSON-serializable response.
 
 - If you call `LLMAdapter.create(stream=True)` in Python code, you must iterate the returned events.
-- The included demo FastAPI `/api/chat` endpoint is designed for **non-streaming JSON** responses.
+- The included demo FastAPI `/api/chat` endpoint is designed for **non-streaming JSON** responses. Streaming is supported in Python via `create(stream=True)`; the demo UI uses non-streaming for simplicity.
 
 
 >Use the CLI script `examples/test_streaming.py` to test streaming at the library level.
@@ -800,22 +802,19 @@ print(result["text"])
 print(result["usage"])
 ```
 
----
-
-#### Example 2: Explicit provider override
+#### Example 2: Provider-native pattern (explicit provider)
 
 ```python
 resp = llm_adapter.create(
-    provider="openai",
-    model="openai:gpt-4o-mini",
-    input="Summarize AI in one sentence",
+    provider="openai",           # Explicit provider
+    model="gpt-4o-mini",         # Provider-native model name
+    input=[{"role": "user", "content": "Hello"}],
 )
 
 result = llm_adapter.build_llm_result_from_response(
     resp,
     provider="openai"
 )
-
 print(result["text"])
 print(result["tool_calls"])
 ```
@@ -855,6 +854,41 @@ pricing2 = llm_adapter.get_pricing_for_model("gpt-4o-mini-2024-07-18")
 - Returns pricing metadata stored in the model registry (if defined).
 - Does not compute costs — exposes registry metadata only.
 
+## Unified Token Accounting
+
+LLMAdapter returns a consistent usage schema across all providers:
+
+### Usage Schema
+```json
+{
+  "prompt_tokens": int,     # non-cached prompt
+  "cached_tokens": int,     # cached prompt (separate rate)
+  "output_tokens": int,     # billed output (answer + reasoning)
+  "reasoning_tokens": int,  # hidden/thought tokens
+  "answer_tokens": int,     # visible output
+  "total_tokens": int       # total billed tokens
+}
+```
+
+### Billing Calculation
+```python
+pricing = llm_adapter.get_pricing_for_model("openai:gpt-4o-mini")
+usage = response.usage
+
+input_cost = (
+    usage["prompt_tokens"] * pricing["input_per_mm"] / 1_000_000 +
+    usage["cached_tokens"] * pricing["cached_input_per_mm"] / 1_000_000
+)
+
+output_cost = usage["output_tokens"] * pricing["output_per_mm"] / 1_000_000
+
+total_cost = input_cost + output_cost
+```
+
+**Key relationships:**
+- `output_tokens = answer_tokens + reasoning_tokens`
+- `total_tokens = prompt_tokens + cached_tokens + output_tokens`
+
 ## Environment variables
 
 Copy `.env.example` to `.env` and to set up your API keys (or use your existing environment variables):
@@ -865,9 +899,17 @@ cp .env.example .env
 
 Supported env vars:
 
+**Minimal working sets:**
+- **OpenAI-only**: `OPENAI_API_KEY`
+- **Gemini native SDK**: `GEMINI_API_KEY`
+- **Gemini OpenAI-compatible**: `GEMINI_API_KEY` + `GEMINI_OPENAI_BASE_URL`
+
+**All supported variables:**
 - `OPENAI_API_KEY`
+- `OPENAI_BASE_URL` (optional) — override the OpenAI-compatible endpoint (proxy / gateway / self-hosted / Azure-like setups). If unset, the OpenAI SDK default is used.
 - `GEMINI_API_KEY`
 - `GEMINI_OPENAI_BASE_URL`
+- `LLM_ADAPTER_ALLOWED_MODELS` (comma-separated list of allowed model keys)
 
 
 ## Run the demo FastAPI server + UI
@@ -978,6 +1020,26 @@ The script will:
 - Demonstrate parameter configurations (basic, extra, extra_body)
 - Show ModelSpec reusability and validation
 - Test both chat completions and embeddings with ModelSpec
+
+### Additional Testing Examples
+
+The `examples/` directory contains several test scripts for different scenarios:
+
+```bash
+# Test custom registry integration
+python3 examples/import_custom_registry.py
+
+# Test custom base URL functionality
+python3 examples/test_openai_base_url.py
+
+# Test magnitude metadata for embeddings
+python3 examples/test_magnitude_metadata.py
+
+# Test provider-agnostic embeddings
+python3 examples/test_provider_agnostic_embeddings.py
+```
+
+These scripts demonstrate specific features and can serve as integration tests or usage examples.
 
 Note: API key errors are expected without valid credentials, but the script structure validates ModelSpec functionality.
 
