@@ -1,5 +1,69 @@
 # Release Notes
 
+## Version 0.2.0 - Parameter Validation System
+
+### Overview
+**Major Enhancement**: Added comprehensive parameter validation system that prevents cross-provider parameter contamination and API failures through registry-based parameter gating.
+
+### Key Features
+- **🛡️ Parameter Validation System**: Registry-controlled parameter filtering with explicit `allowed`/`disabled` lists
+- **🔒 Provider Isolation**: Gemini parameters cannot reach OpenAI APIs and vice versa
+- **🎯 Explicit Parameter Control**: Each model defines exactly which parameters are permitted
+- **🔄 Silent Protection**: Invalid parameters filtered out automatically without user errors
+- **⚙️ Enhanced Registry**: All models now include comprehensive `param_policy` configurations
+- **📚 Updated Documentation**: Complete parameter validation documentation and examples
+
+### Breaking Changes
+- **Method Rename**: `_filter_kwargs_by_capabilities` → `_apply_registry_param_policy`
+- **Stricter Validation**: Some parameters that previously passed through may now be filtered (improves API safety)
+
+### Parameter Validation Examples
+```python
+# Before: Could cause API failures
+llm_adapter.create(
+    model="openai:gpt-4o-mini",
+    include_thoughts=True,  # ❌ Would reach OpenAI API and fail
+    temperature=0.7
+)
+
+# After: Automatically filtered
+llm_adapter.create(
+    model="openai:gpt-4o-mini", 
+    include_thoughts=True,  # ✅ Filtered out silently
+    temperature=0.7        # ✅ Allowed through
+)
+# Result: Only valid parameters reach provider APIs
+```
+
+### Registry Parameter Policies
+All models now include explicit parameter policies:
+```python
+"openai:gpt-4o-mini": ModelInfo(
+    param_policy={
+        "allowed": {"max_output_tokens", "temperature", "top_p"},
+        "disabled": {"reasoning_effort", "include_thoughts", "thinking_level"}
+    }
+)
+```
+
+### Benefits
+- **API Safety**: Invalid parameters never reach provider APIs
+- **Clear Documentation**: `allowed` lists show supported parameters explicitly
+- **Provider Compatibility**: Cross-provider parameter contamination prevented
+- **Better UX**: Users don't see cryptic API errors from invalid parameters
+
+### Documentation Updates
+- **README.md**: Added comprehensive parameter validation system documentation
+- **MODEL_REGISTRY.md**: Updated with parameter policy examples and best practices
+- **Examples**: Updated custom registry examples with proper parameter policies
+
+### Migration Guide
+- **Custom Registries**: Add `param_policy` with `allowed`/`disabled` lists to all models
+- **Method Calls**: No changes needed for existing code (filtering is automatic)
+- **Examples**: See `examples/custom_registry.py` for updated parameter policies
+
+---
+
 ## Version 0.1.0 - Initial Release
 
 ### Overview

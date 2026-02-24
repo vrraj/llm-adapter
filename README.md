@@ -4,7 +4,7 @@
 ![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
 
-Registry-driven, extensible LLM routing and response normalization for generation and embeddings (**custom registry** overrides/extensions, explicit endpoint semantics, policy-driven parameter mapping, and pricing/limits).
+Registry-driven, extensible LLM routing and response normalization for generation and embeddings (**custom registry** overrides/extensions, explicit endpoint semantics, policy-driven parameter mapping, **parameter validation/gating**, and pricing/limits).
 Install from **PyPI** for the core library, or clone from **GitHub** to run the demo UI and test scripts.
 
 
@@ -21,6 +21,7 @@ This package provides:
 
 - **Provider-agnostic** entrypoints for LLM generation and embeddings (call by **registry key**)
 - **Custom model registry** support (override/extend the defaults)
+- **🛡️ Parameter validation/gating**: Registry-controlled parameter filtering to prevent unauthorized/unsupported parameters
 - **Normalized response helper**: text, tool calls, reasoning tokens, and usage
 - **Registry-based pricing** metadata helpers
 - **ModelRegistry**: explicit endpoint routing (**OpenAI**: Responses, Chat Completions, Embeddings • **Gemini**: OpenAI-compatible endpoint, native SDK generation, native SDK embeddings) + model resolution, parameter mapping, and model policies (limits, pricing, reasoning/thinking)
@@ -29,12 +30,31 @@ This package provides:
 
 >**Note:** Demo UI and helper scripts are available when running from source.
 
-## Prerequisites
+## 🛡️ Parameter Validation & Gating
 
-- **Python 3.10+** - Required for union type syntax (`|`) used in the code
-  - Tested primarily on Python 3.10–3.12 (3.13 may work but depends on upstream SDK compatibility).
-- **pip** - Package installer (use `python3 -m pip` if `pip` not found)
-- **LLM API keys**: OpenAI and Gemini
+The LLM Adapter includes **automatic parameter validation** that prevents unauthorized or unsupported parameters from reaching provider APIs. This ensures API safety and prevents cross-provider parameter contamination.
+
+### How It Works
+
+1. **Registry Control**: Each model defines exactly which parameters are allowed via `param_policy`
+2. **Automatic Filtering**: Invalid parameters are silently filtered out before API calls
+3. **Provider Isolation**: Gemini parameters can't reach OpenAI APIs and vice versa
+
+### Example
+
+```python
+# Invalid parameters are automatically filtered out
+resp = llm_adapter.create(
+    model="openai:gpt-4o-mini",
+    input="Hello",
+    temperature=0.7,           # ✅ Allowed
+    include_thoughts=True,    # ❌ Filtered out (Gemini-specific)
+    thinking_level="high"     # ❌ Filtered out (Gemini-specific)
+)
+# Result: Only valid parameters reach OpenAI API
+```
+
+For detailed parameter validation documentation, see the **Parameter Validation System** section below.
 
 
 

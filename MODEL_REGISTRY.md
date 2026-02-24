@@ -144,7 +144,7 @@ adapter = LLMAdapter(
 
 ## 🛡️ Parameter Validation System
 
-The model registry includes a **comprehensive parameter validation system** that ensures only valid parameters reach the provider APIs.
+The model registry includes a **comprehensive parameter validation system** that ensures only valid parameters reach the provider APIs and prevents unauthorized or unsupported parameters from being used.
 
 ### Parameter Policy Structure
 
@@ -271,15 +271,27 @@ param_policy={"allowed": {"temperature", "top_p"}}  # ✅ Correct
 
 ## Summary
 
-## Summary
-
 The **Model Registry** is the configuration system that powers **llm_adapter**. It enables:
 
 - **Stable registry keys** for provider-agnostic calls
+- **🛡️ Parameter validation/gating**: Registry-controlled filtering to prevent unauthorized/unsupported parameters
 - **Explicit endpoint routing** (Responses, Chat Completions, Embeddings, Gemini SDK)
 - **Policy-driven parameter mapping** (including reasoning/thinking controls)
 - **Pricing + limits metadata** for usage/cost-aware apps
 - **Custom registries** to override or extend defaults
+
+### Parameter Control Architecture
+
+```
+User Call                    Model Registry                Provider API
+─────────────────           ──────────────────           ──────────────────
+llm_adapter.create(         REGISTRY["openai:gpt-4o"]     OpenAI API
+  model="openai:gpt-4o",  → param_policy: {              → Only valid
+  include_thoughts=True)    →   allowed: {...}              → parameters
+  temperature=0.7          →   disabled: {...}             → reach API
+                           → Filter parameters
+                           → Remove invalid params
+```
 
 ## Architecture Overview
 
