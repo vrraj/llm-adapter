@@ -52,6 +52,33 @@ resp = llm_adapter.create(
     thinking_level="high"     # ❌ Filtered out (Gemini-specific)
 )
 # Result: Only valid parameters reach OpenAI API
+
+# Correct usage for Gemini reasoning models
+resp = llm_adapter.create(
+    model="gemini:openai-reasoning-2.5-flash",
+    input="Hello",
+    reasoning_effort="medium", # ✅ Controls reasoning intensity
+    include_reasoning=True,     # ✅ Shows reasoning tokens (Gemini only)
+    max_output_tokens=1000     # ✅ Output token limit
+)
+
+# Alternative: include_reasoning only (uses default reasoning effort)
+resp = llm_adapter.create(
+    model="gemini:openai-reasoning-2.5-flash",
+    input="Hello",
+    include_reasoning=True,     # ✅ Shows reasoning tokens with default effort
+    max_output_tokens=1000
+)
+# Result: Uses registry default reasoning effort (e.g., "minimal") + shows tokens
+
+# Alternative: reasoning_effort only (auto-includes reasoning tokens)
+resp = llm_adapter.create(
+    model="gemini:openai-reasoning-2.5-flash",
+    input="Hello",
+    reasoning_effort="medium", # ✅ Auto-includes reasoning tokens
+    max_output_tokens=1000
+)
+# Result: Uses specified effort + auto-includes reasoning tokens
 ```
 
 For detailed parameter validation documentation, see the **Parameter Validation System** section below.
@@ -529,6 +556,35 @@ This standalone package uses these routing semantics:
    - Unknown kwargs are generally passed through and may be accepted/rejected by the downstream SDK.
 
 ## Parameter Validation System
+
+### Reasoning Parameters Behavior
+
+For Gemini reasoning models, the adapter provides two main parameters with automatic behavior:
+
+#### `reasoning_effort`
+- **Purpose**: Controls reasoning intensity ("none", "minimal", "low", "medium", "high")
+- **Behavior**: Automatically includes reasoning tokens when set
+- **Default**: Uses registry default if not specified (e.g., "minimal")
+
+#### `include_reasoning`
+- **Purpose**: Explicitly control reasoning token visibility (Gemini only)
+- **Behavior**: Forces reasoning token inclusion regardless of reasoning_effort
+- **Effect**: Uses registry default reasoning effort when reasoning_effort is not set
+
+#### Parameter Interaction
+
+| `reasoning_effort` | `include_reasoning` | Result |
+|-------------------|-------------------|---------|
+| Not set | Not set | No reasoning (standard response) |
+| Set (any value) | Not set | ✅ Reasoning with specified effort + auto-includes tokens |
+| Not set | `True` | ✅ Reasoning with default effort + includes tokens |
+| Set (any value) | `True` | ✅ Reasoning with specified effort + includes tokens |
+
+**Key Points:**
+- Setting `reasoning_effort` automatically enables reasoning token inclusion
+- Setting `include_reasoning=True` forces token inclusion and applies default reasoning effort
+- Both parameters together provide maximum control over reasoning behavior
+
 
 The LLM Adapter includes a **comprehensive parameter validation system** that ensures only valid parameters reach the provider APIs. This prevents cross-provider parameter contamination and API failures.
 
@@ -1087,9 +1143,12 @@ The **LLM Adapter Interactive Playground**/API supports additional inference par
 - `temperature`
 - `top_p`
 - `reasoning_effort`
+- `include_reasoning` (Gemini only)
 - `max_output_tokens`
 
-When `reasoning_effort` is set for a reasoning-capable Gemini model, the handler requests thoughts via `include_thoughts` and the **LLM Adapter Interactive Playground** displays both **Reasoning** and **Answer** separately.
+When `reasoning_effort` is set for a reasoning-capable Gemini model, or when `include_reasoning=True` is explicitly passed, the handler requests thoughts via `include_thoughts` and the **LLM Adapter Interactive Playground** displays both **Reasoning** and **Answer** separately.
+
+**Note**: `include_reasoning=True` without `reasoning_effort` will use the registry's default reasoning effort (e.g., "minimal") while still displaying reasoning tokens.
 
 ### ModelInfo API Response
 

@@ -1629,32 +1629,6 @@ class LLMAdapter:
 
         return str(value).lower()
 
-    def _map_reasoning_parameter_with_default(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        mi = self._lookup_model_info_from_registry(model)
-        if mi is None:
-            return kwargs
-        rp = getattr(mi, "reasoning_parameter", None)
-        if not (isinstance(rp, (tuple, list)) and len(rp) >= 2):
-            return kwargs
-
-        param_name, default_value = rp[0], rp[1]
-        mapped_kwargs = kwargs.copy()
-
-        if "reasoning_effort" in kwargs:
-            reasoning_value = kwargs["reasoning_effort"]
-            converted_value = self._convert_reasoning_value(model, reasoning_value)
-            mapped_kwargs[param_name] = converted_value
-            if param_name != "reasoning_effort":
-                mapped_kwargs.pop("reasoning_effort", None)
-        elif (
-            default_value is not None
-            and getattr(mi, "capabilities", {}).get("reasoning_effort", False)
-            and kwargs.get(param_name) is None
-        ):
-            mapped_kwargs[param_name] = default_value
-
-        return mapped_kwargs
-
     def _normalize_effort_name(self, effort: Any) -> str:
         if effort is None:
             return "medium"
@@ -1805,14 +1779,15 @@ class LLMAdapter:
             include_thoughts = False
             if kwargs.get("reasoning_effort") is not None:
                 include_thoughts = True
-            if kwargs.get("debug_thoughts"):
+            if kwargs.get("include_reasoning"):
                 include_thoughts = True
 
             if include_thoughts:
                 model_info = self._lookup_model_info_from_registry(model)
                 if model_info is not None and getattr(model_info, "provider", None) == "gemini":
-                    caps = getattr(model_info, "capabilities", {}) or {}
-                    if bool(caps.get("reasoning_effort", False)):
+                    policy = self._get_model_reasoning_policy(model)
+                    mode = str(policy.get("mode") or "").strip().lower() if isinstance(policy, dict) else ""
+                    if mode in ("gemini_level", "gemini_budget"):
                         existing = prepared_kwargs.get("extra_body")
                         inner: Dict[str, Any] = {}
                         if isinstance(existing, dict):
@@ -2080,6 +2055,36 @@ class LLMAdapter:
             elif endpoint == self.ENDPOINT_CHAT_COMPLETIONS:
                 mapped_kwargs["max_completion_tokens"] = mot_i
 
+        # ---- OpenAI Chat Completions: reasoning_effort is a top-level param ----
+        # Our adapter may have normalized `reasoning_effort` into a Responses-style `reasoning={"effort": ...}`.
+        # For chat.completions, convert back to `reasoning_effort` and clamp invalid values to "low".
+        if endpoint == self.ENDPOINT_CHAT_COMPLETIONS:
+            allowed_efforts = {"minimal", "low", "medium", "high"}
+
+            # If a Responses-style reasoning block is present, translate it.
+            try:
+                r = mapped_kwargs.get("reasoning")
+                if isinstance(r, dict) and r.get("effort") is not None:
+                    eff = str(r.get("effort") or "").strip().lower()
+                    if eff not in allowed_efforts:
+                        eff = "low"
+                    mapped_kwargs["reasoning_effort"] = eff
+                    mapped_kwargs.pop("reasoning", None)
+            except Exception:
+                # Best-effort: never let a bad value break the request.
+                mapped_kwargs.pop("reasoning", None)
+
+            # If caller passed reasoning_effort directly, validate and clamp.
+            try:
+                if mapped_kwargs.get("reasoning_effort") is not None:
+                    eff2 = str(mapped_kwargs.get("reasoning_effort") or "").strip().lower()
+                    if eff2 not in allowed_efforts:
+                        mapped_kwargs["reasoning_effort"] = "low"
+                    else:
+                        mapped_kwargs["reasoning_effort"] = eff2
+            except Exception:
+                mapped_kwargs["reasoning_effort"] = "low"
+
         if endpoint == self.ENDPOINT_RESPONSES:
             if stream:
                 return client.responses.create(model=resolved_model, input=input, stream=True, **mapped_kwargs)
@@ -2288,15 +2293,10 @@ class LLMAdapter:
 
         if endpoint == self.ENDPOINT_GEMINI_SDK:
             native_client = client
-  
+
             # Build contents + config for google-genai.
-            # Start from already-prepared kwargs so canonical token handling and thinking config stay consistent.
+            # Reuse already-prepared kwargs (registry policy + reasoning policy + thinking_config injection).
             sdk_kwargs: Dict[str, Any] = dict(working_kwargs or {}) if isinstance(working_kwargs, dict) else {}
-            try:
-                sdk_kwargs = self._apply_registry_param_policy(model, sdk_kwargs)
-                sdk_kwargs = self._apply_gemini_reasoning_policy(model, sdk_kwargs)
-            except Exception:
-                pass
 
             cfg: Dict[str, Any] = {}
             if sdk_kwargs.get("temperature") is not None:
@@ -2366,22 +2366,35 @@ class LLMAdapter:
                     contents = "\n".join(lines) if lines else ""
 
             # Thinking config
+            # For Gemini SDK, the config expects `thinking_config` at the top level.
+            # Our OpenAI-compatible Gemini adapter stores it under extra_body.google.thinking_config.
             try:
                 tc_kwargs: Dict[str, Any] = {}
-                # If reasoning was requested via public knob, force include_thoughts=True
+
+                # Best-effort: if reasoning was requested via the public knob/UI, force include_thoughts=True
                 try:
-                    if kwargs.get("reasoning_effort") is not None or kwargs.get("debug_thoughts"):
+                    if kwargs.get("reasoning_effort") is not None or kwargs.get("include_reasoning"):
                         tc_kwargs["include_thoughts"] = True
                 except Exception:
                     pass
-                if sdk_kwargs.get("include_thoughts") is not None:
-                    tc_kwargs["include_thoughts"] = bool(sdk_kwargs.get("include_thoughts"))
-                if sdk_kwargs.get("thinking_budget") is not None:
-                    tc_kwargs["thinking_budget"] = sdk_kwargs.get("thinking_budget")
-                if sdk_kwargs.get("thinking_level") is not None:
-                    tc_kwargs["thinking_level"] = sdk_kwargs.get("thinking_level")
+
+                # Extract thinking_config from prepared extra_body, if present.
+                eb = sdk_kwargs.get("extra_body") if isinstance(sdk_kwargs, dict) else None
+                inner: Dict[str, Any] = {}
+                if isinstance(eb, dict):
+                    inner = eb.get("extra_body", eb)
+                google = inner.get("google") if isinstance(inner.get("google"), dict) else {}
+                tc = google.get("thinking_config") if isinstance(google.get("thinking_config"), dict) else {}
+
+                # Merge extracted config into tc_kwargs (tc_kwargs wins if it already set include_thoughts).
+                for k, v in tc.items():
+                    if k not in tc_kwargs:
+                        tc_kwargs[k] = v
+
+                # If both budget and level exist, prefer level (SDK accepts either; avoid conflicts).
                 if "thinking_budget" in tc_kwargs and "thinking_level" in tc_kwargs:
                     tc_kwargs.pop("thinking_budget", None)
+
                 if tc_kwargs:
                     from google.genai import types as _types  # type: ignore
 
