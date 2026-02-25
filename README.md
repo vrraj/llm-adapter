@@ -12,9 +12,9 @@ GitHub: [https://github.com/vrraj/llm-adapter](https://github.com/vrraj/llm-adap
 
 ## LLM Adapter Interactive Playground
 
+The Interactive Playground allows for testing models (model registry keys), exposes model registry metadata, parameter controls, answer / response, reasoning tokens (if available), and provider-agnostic normalized responses in one interface.
 ![LLM Adapter Interactive Playground](images/llm_adapter_interactive_playground.png)
 
-The Interactive Playground allows for testing models (model registry keys), exposes model registry metadata, parameter controls, answer / response, reasoning tokens (if available), and provider-agnostic normalized responses in one interface.
 
 
 This package provides:
