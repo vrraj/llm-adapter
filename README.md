@@ -4,7 +4,7 @@
 ![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
 
-Registry-driven, extensible LLM routing and response normalization for generation and embeddings (**custom registry** overrides/extensions, explicit endpoint semantics, policy-driven parameter mapping, **parameter validation/gating**, and pricing/limits).
+Registry-driven, extensible LLM routing and response normalization for generation and embeddings (**custom registry** overrides/extensions, explicit endpoint semantics, policy-driven parameter mapping, **model access control**, **parameter validation/gating**, and pricing/limits).
 Install from **PyPI** for the core library, or clone from **GitHub** to run the demo UI and test scripts.
 
 
@@ -21,7 +21,8 @@ This package provides:
 
 - **Provider-agnostic** entrypoints for LLM generation and embeddings (call by **registry key**)
 - **Custom model registry** support (override/extend the defaults)
-- **🛡️ Parameter validation/gating**: Registry-controlled parameter filtering to prevent unauthorized/unsupported parameters
+- **� Model access control**: Environment-based allowlist to restrict which models can be used
+- **�️ Parameter validation/gating**: Registry-controlled parameter filtering to prevent unauthorized/unsupported parameters
 - **Normalized response helper**: text, tool calls, reasoning tokens, and usage
 - **Registry-based pricing** metadata helpers
 - **ModelRegistry**: explicit endpoint routing (**OpenAI**: Responses, Chat Completions, Embeddings • **Gemini**: OpenAI-compatible endpoint, native SDK generation, native SDK embeddings) + model resolution, parameter mapping, and model policies (limits, pricing, reasoning/thinking)
@@ -29,6 +30,94 @@ This package provides:
 - **Streaming** supported at library level
 
 >**Note:** Demo UI and helper scripts are available when running from source.
+
+## 🚀 Quick API Reference
+
+### Core API Calls
+```python
+from llm_adapter import llm_adapter, LLMError, ModelSpec
+from llm_adapter.model_registry import ModelInfo, validate_registry
+
+# Text generation
+resp = llm_adapter.create(
+    model="openai:gpt-4o-mini",
+    input="Hello world",
+    max_output_tokens=100
+)
+
+# Embeddings
+emb = llm_adapter.create_embedding(
+    model="openai:embed_small", 
+    input=["text1", "text2"]
+)
+
+# Streaming
+for chunk in llm_adapter.create(model="...", input="...", stream=True):
+    print(chunk.output_text)
+```
+
+### Custom Registry & Control
+```python
+from llm_adapter import LLMAdapter
+from llm_adapter.model_registry import ModelInfo, Pricing
+
+# Custom model definitions
+custom_registry = {
+    "my-model": ModelInfo(
+        provider="openai",
+        model="gpt-4-turbo", 
+        endpoint="chat_completions",
+        pricing=Pricing(input_per_mm=0.05, output_per_mm=0.15),
+        param_policy={"allowed": {"temperature", "max_tokens"}},
+        limits={"max_output_tokens": 4000}
+    )
+}
+
+# Create adapter with custom registry
+adapter = LLMAdapter(model_registry=custom_registry)
+
+# Validate registry before use
+validate_registry(custom_registry)
+```
+
+### Response Handling & Error Management
+```python
+try:
+    resp = llm_adapter.create(model="...", input="...")
+    
+    # Access normalized response
+    print(resp.output_text)           # Generated text
+    print(resp.usage)                  # Token usage
+    print(resp.model)                  # Model used
+    print(resp.finish_reason)          # Why generation stopped
+    
+    # Tool calls (if any)
+    for tool_call in resp.tool_calls:
+        print(tool_call.function, tool_call.arguments)
+        
+except LLMError as e:
+    print(f"Error: {e.code} - {e}")  # Structured error handling
+```
+
+### Model Registry Control
+```python
+# What you control via registry:
+- ✅ **Provider routing** (openai, gemini)
+- ✅ **Endpoint selection** (chat_completions, embeddings, gemini_sdk)
+- ✅ **Parameter policies** (allowed/disallowed parameters)
+- ✅ **Usage limits** (max_output_tokens, rate limits)
+- ✅ **Pricing metadata** (cost tracking)
+- ✅ **Model capabilities** (reasoning, tools, etc.)
+- ✅ **Access control** (via LLM_ADAPTER_ALLOWED_MODELS)
+```
+
+### What You Get
+- **🔒 Provider safety** - Invalid parameters filtered automatically
+- **📊 Cost control** - Pricing metadata + usage limits
+- **🔐 Access control** - Environment-based model allowlist
+- **🔄 Consistent responses** - Normalized format across providers
+- **⚡ Streaming support** - Real-time token generation
+- **🛠️ Type safety** - ModelSpec for structured configuration
 
 ## 🛡️ Parameter Validation & Gating
 
@@ -145,6 +234,13 @@ print("Embedding Response:")
 for i, emb in enumerate(emb_resp.data):
     print(f"Embedding {i+1} (First 7 vectors): {emb[:7]}...")
 print(f"Usage: {getattr(emb_resp, 'usage', 'Usage info not available')}")
+```
+
+**Or run the pre-built example:**
+```bash
+# After installing from PyPI, download and run:
+curl -O https://raw.githubusercontent.com/vrraj/llm-adapter/main/examples/llm_adapter_import_example.py
+python llm_adapter_import_example.py
 ```
 
 ### Option 2: Run from source (demo UI + editable install)
@@ -337,42 +433,6 @@ The LLM Adapter includes an **interactive demo UI** that allows you to test cust
 
 4. **Select your custom models:** The dropdown will now show both default and custom models
 
-### How the Demo Works
-
-The demo UI dynamically loads your custom registry from `examples/custom_registry.py` and merges it with the default registry. When you toggle the checkbox:
-
-- **Unchecked:** Shows only default models from `src/llm_adapter/model_registry.py`
-- **Checked:** Shows merged registry (default + your custom models)
-
-### Creating Your Custom Registry
-
-**File:** `examples/custom_registry.py`
-
-```python
-from llm_adapter.model_registry import ModelInfo, Pricing, validate_registry
-
-REGISTRY = {
-    "openai:custom_reasoning_o3-mini": ModelInfo(
-        key="openai:custom_reasoning_o3-mini",  # Must match dict key
-        provider="openai",
-        model="o3-mini",
-        endpoint="responses",
-        pricing=Pricing(input_per_mm=1.10, output_per_mm=4.40),
-        limits={"max_output_tokens": 2000},
-        capabilities={
-            "assistant_role": "assistant",
-            "reasoning_effort": True,
-        },
-        param_policy={
-            "allowed": {"max_output_tokens", "reasoning_effort", "reasoning", "tools", "tool_choice"},
-            "disabled": {"stream", "temperature", "top_p", "include_thoughts"}
-        },
-        reasoning_policy={
-            "mode": "openai_effort",
-            "default": "low",
-        },
-        reasoning_parameter=("reasoning_effort", "low"),
-    ),
     "openai:custom_reasoning_gpt-5-mini": ModelInfo(
         key="openai:custom_reasoning_gpt-5-mini",  # Must match dict key
         provider="openai",
@@ -1095,7 +1155,144 @@ Supported env vars:
 - `OPENAI_BASE_URL` (optional) — override the OpenAI-compatible endpoint (proxy / gateway / self-hosted / Azure-like setups). If unset, the OpenAI SDK default is used.
 - `GEMINI_API_KEY`
 - `GEMINI_OPENAI_BASE_URL`
-- `LLM_ADAPTER_ALLOWED_MODELS` (comma-separated list of allowed model keys)
+- `LLM_ADAPTER_ALLOWED_MODELS` (comma-separated list of allowed model keys) - Restrict which models can be used. See **Model Allowlist** section below for details.
+
+
+## Model Allowlist (Access Control)
+
+The `LLM_ADAPTER_ALLOWED_MODELS` environment variable allows you to restrict which models can be used, providing an additional layer of security and cost control.
+
+### How It Works
+
+When the allowlist is enabled, only models explicitly listed in the allowlist can be used. Attempts to use non-allowed models will raise an `LLMError` with `code="model_not_allowed"`.
+
+### Configuration Methods
+
+#### Environment Variable (Only Method)
+```bash
+# Allow specific models
+export LLM_ADAPTER_ALLOWED_MODELS="openai:gpt-4o-mini,gemini:native-sdk-reasoning-2.5-flash"
+
+# Allow all models (empty string or unset)
+export LLM_ADAPTER_ALLOWED_MODELS=""
+# or simply don't set the variable
+```
+
+### Behavior
+
+| `LLM_ADAPTER_ALLOWED_MODELS` | Behavior |
+|-------------------------------|----------|
+| Not set | **All models allowed** (no restriction) |
+| Empty string (`""`) | **All models allowed** (no restriction) |
+| Comma-separated list | **Only listed models allowed** |
+
+### Error Handling
+
+When a model is not allowed:
+```python
+from llm_adapter import LLMAdapter, LLMError
+
+adapter = LLMAdapter()  # With allowlist enabled
+
+try:
+    resp = adapter.create(model="disallowed-model", input="Hello")
+except LLMError as e:
+    if e.code == "model_not_allowed":
+        print(f"Model not permitted: {e.message}")
+        # Output: Model 'disallowed-model' is not permitted by allowlist
+```
+
+### Use Cases
+
+- **Production environments**: Restrict to approved models only
+- **Cost control**: Limit usage to specific pricing tiers
+- **Security**: Prevent access to experimental or powerful models
+- **Multi-tenant apps**: Different allowlists per customer/tenant
+
+### Precedence Order
+
+1. **Environment variable** (global setting)
+2. **None** (no restriction - default)
+
+### Examples
+
+```bash
+# .env file example
+LLM_ADAPTER_ALLOWED_MODELS=openai:gpt-4o-mini,openai:gpt-4o,gemini:native-sdk-reasoning-2.5-flash
+
+# Command line example
+export LLM_ADAPTER_ALLOWED_MODELS="openai:gpt-4o-mini,gemini:native-sdk-reasoning-2.5-flash"
+python your_app.py
+```
+
+```python
+# Code example
+import os
+from llm_adapter import llm_adapter
+
+# Use environment variable for allowlist control
+# LLM_ADAPTER_ALLOWED_MODELS is read automatically
+resp = llm_adapter.create(
+    model="openai:gpt-4o-mini",
+    input="Hello",
+    max_output_tokens=200,
+)
+```
+
+### Custom Registries + Allowlist
+
+The allowlist works with custom registries by checking **registry keys** in the merged registry.
+
+```python
+# Custom registry
+custom_registry = {
+    "my-company:custom-model": ModelInfo(provider="openai", model="gpt-4-turbo", endpoint="chat_completions")
+}
+
+# Environment variable: LLM_ADAPTER_ALLOWED_MODELS="openai:gpt-4o-mini,my-company:custom-model"
+
+adapter = LLMAdapter(model_registry=custom_registry)
+
+# ✅ Allowed: In allowlist (from default or custom registry)
+adapter.create(model="my-company:custom-model", input="Hello")
+
+# ❌ Blocked: Exists in registry but not in allowlist
+# adapter.create(model="my-company:other-model", input="Hello")
+```
+
+**Key Point:** Allowlist checks registry keys, not provider-native model names.
+
+### Error Handling
+
+The adapter raises structured `LLMError` exceptions for various failure conditions. Always wrap API calls in try-catch blocks.
+
+```python
+from llm_adapter import llm_adapter, LLMError
+
+try:
+    resp = llm_adapter.create(
+        model="openai:gpt-4o-mini",
+        input=[{"role": "user", "content": "Hello"}],
+        max_output_tokens=200,
+    )
+    
+    print("Response:", resp.output_text)
+    print("Usage:", resp.usage)
+    
+except LLMError as e:
+    print(f"Error: {e}")
+    print(f"Code: {e.code}")           # Error code (e.g., "model_not_allowed")
+    print(f"Provider: {e.provider}")   # Provider name
+    print(f"Model: {e.model}")         # Model that failed
+```
+
+**Common Error Codes:**
+- `model_not_allowed` - Model not in allowlist
+- `provider_not_found` - Unable to determine provider for model
+- `missing_api_key` - API key not configured
+- `unsupported_provider` - Provider not supported
+
+**Key Point:** `LLMError` provides structured error information to help debug issues.
 
 
 ## Run the demo FastAPI server + UI

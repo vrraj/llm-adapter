@@ -155,7 +155,6 @@ class LLMAdapter:
         openai_base_url: Optional[str] = None,
         gemini_base_url: Optional[str] = None,
         model_registry: Optional[Dict[str, Any]] = None,
-        allowed_model_keys: Optional[Iterable[str]] = None,
         openai_client: Any = None,
         gemini_client: Any = None,
     ):
@@ -177,24 +176,13 @@ class LLMAdapter:
             self.model_registry = {**dict(defaults), **dict(model_registry)}
 
         # Allowlist policy (optional): restrict which registry keys may be used.
-        # Precedence:
-        # 1) allowed_model_keys passed to ctor (explicit wins)
-        # 2) env var LLM_ADAPTER_ALLOWED_MODELS (comma-separated)
-        # 3) None (no restriction)
-        self.allowed_model_keys: Optional[Set[str]] = None
-        if allowed_model_keys is not None:
-            try:
-                self.allowed_model_keys = {str(k).strip() for k in allowed_model_keys if str(k).strip()}
-            except Exception:
-                # Best-effort fallback
-                try:
-                    self.allowed_model_keys = set([str(allowed_model_keys).strip()]) if str(allowed_model_keys).strip() else None
-                except Exception:
-                    self.allowed_model_keys = None
+        # Set via LLM_ADAPTER_ALLOWED_MODELS environment variable (comma-separated).
+        # If not set or empty, all models are allowed.
+        env_val = os.getenv("LLM_ADAPTER_ALLOWED_MODELS")
+        if isinstance(env_val, str) and env_val.strip():
+            self.allowed_model_keys = {k.strip() for k in env_val.split(",") if k.strip()}
         else:
-            env_val = os.getenv("LLM_ADAPTER_ALLOWED_MODELS")
-            if isinstance(env_val, str) and env_val.strip():
-                self.allowed_model_keys = {k.strip() for k in env_val.split(",") if k.strip()}
+            self.allowed_model_keys = None
 
         # Optional injected clients (mirrors chat-with-rag handler ctor)
         self._openai = openai_client
@@ -576,10 +564,10 @@ class LLMAdapter:
         return self._gemini_native
 
     def _resolve_provider_model_name(self, model: str) -> str:
-        """Resolve model alias/registry key to actual model name."""
+        """Resolve registry key to provider-native model name."""
         try:
             model_info = self.model_registry.get(model)
-            if model_info:
+            if model_info is not None:
                 return str(getattr(model_info, "model", model) or model)
         except Exception:
             pass
@@ -590,11 +578,10 @@ class LLMAdapter:
 
         Resolution order:
         1) Direct registry-key lookup (preferred)
-        2) Provider-native model name scan (only when allowlist is not enabled)
+        2) Provider-native model name scan (best-effort, may be ambiguous)
 
-        If an allowlist is enabled (`self.allowed_model_keys`), callers must use
-        registry keys (e.g. "openai:gpt-4o-mini"). Provider-native model names
-        (e.g. "gpt-4o-mini") are rejected to avoid ambiguity.
+        Note: Allowlist validation is handled in the create() method before this
+        function is called, so this function only focuses on model resolution.
         """
         if not model:
             return None
@@ -611,28 +598,7 @@ class LLMAdapter:
             # 1) Direct registry-key lookup
             info = self.model_registry.get(model)
             if info is not None:
-                if self.allowed_model_keys is not None and model not in self.allowed_model_keys:
-                    raise LLMError(
-                        provider=_infer_provider_from_key(model),
-                        model=model,
-                        kind="config",
-                        code="model_not_allowed",
-                        message=f"Model '{model}' is not in allowed_model_keys",
-                    )
                 return info
-
-            # If allowlist is enabled, do not allow provider-native name lookup.
-            if self.allowed_model_keys is not None:
-                raise LLMError(
-                    provider=_infer_provider_from_key(str(model)),
-                    model=str(model),
-                    kind="config",
-                    code="model_key_required",
-                    message=(
-                        "Allowlist is enabled; model must be referenced by registry key "
-                        "(e.g. 'openai:gpt-4o-mini'), not a provider-native model name."
-                    ),
-                )
 
             # 2) Provider-native model name scan (best-effort, may be ambiguous)
             for candidate_key, candidate in self.model_registry.items():
@@ -1919,8 +1885,24 @@ class LLMAdapter:
                 except Exception:
                     provider = ""
 
-            if not provider:
-                provider = "openai"
+        # Early allowlist validation - this is the single source of truth for model access control
+        if model and self.allowed_model_keys is not None:
+            if model not in self.allowed_model_keys:
+                def _infer_provider_from_key(k: str) -> str:
+                    try:
+                        if isinstance(k, str) and ":" in k:
+                            return k.split(":", 1)[0].strip().lower() or "unknown"
+                    except Exception:
+                        pass
+                    return "unknown"
+                
+                raise LLMError(
+                    provider=_infer_provider_from_key(model),
+                    model=model,
+                    kind="config",
+                    code="model_not_allowed",
+                    message=f"Model '{model}' is not permitted by allowlist (LLM_ADAPTER_ALLOWED_MODELS)",
+                )
 
         # Never forward None-valued params to provider SDK calls.
         if isinstance(kwargs, dict) and kwargs:
@@ -2003,7 +1985,13 @@ class LLMAdapter:
             endpoint = None
 
         if not provider:
-            provider = "openai"
+            raise LLMError(
+                provider="unknown",
+                model=model,
+                kind="config",
+                code="provider_not_found",
+                message=f"Unable to determine provider for model '{model}'. Model must be in registry or provider must be specified explicitly.",
+            )
 
         if provider == "openai":
             return self._openai_embedding_call(model=model, input=input, **kwargs)

@@ -442,7 +442,9 @@ def validate_registry(registry: Dict[str, ModelInfo], *, strict: bool = True) ->
 
         # provider / endpoint validation
         prov = str(getattr(mi, "provider", "")).strip().lower()
-        if prov not in allowed_providers:
+        if not prov:
+            _err(f"[{k}] provider is required but missing or empty")
+        elif prov not in allowed_providers:
             _err(f"[{k}] provider {prov!r} not in {sorted(allowed_providers)}")
 
         ep = str(getattr(mi, "endpoint", "")).strip()

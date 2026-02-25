@@ -38,3 +38,4 @@ Issues = "https://github.com/vrraj/llm-adapter/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
