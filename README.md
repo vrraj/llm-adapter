@@ -3,6 +3,11 @@
 
 ![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
+## Install
+
+```bash
+pip install vrraj-llm-adapter
+```
 
 Registry-driven, extensible LLM routing and response normalization for generation and embeddings (**custom registry** overrides/extensions, explicit endpoint semantics, policy-driven parameter mapping, **model access control**, **parameter validation/gating**, and pricing/limits).
 Install from **PyPI** for the core library, or clone from **GitHub** to run the demo UI and test scripts.
