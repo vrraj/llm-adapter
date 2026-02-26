@@ -17,6 +17,11 @@
 # - Gemini reasoning models (full Gemini parameter support)
 # - OpenAI standard models (basic generation params only)
 # - Embedding models (provider-specific dimension handling)
+#
+# REQUIREMENTS:
+# - Set OPENAI_API_KEY and/or GEMINI_API_KEY for testing
+# - export OPENAI_API_KEY=...
+# - export GEMINI_API_KEY=...
 
 from llm_adapter.model_registry import ModelInfo, Pricing, validate_registry
 

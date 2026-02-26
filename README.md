@@ -3,17 +3,23 @@
 
 ![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
-## Install
+A provider-agnostic LLM adapter with model registry, access control, parameter policies, pricing metadata, and unified response normalization — for text generation and embeddings.
 
-```bash
-pip install vrraj-llm-adapter
-```
+**Install:** `pip install vrraj-llm-adapter`  
+**PyPI:** https://pypi.org/project/vrraj-llm-adapter  
+**GitHub:** https://github.com/vrraj/llm-adapter
 
-Registry-driven, extensible LLM routing and response normalization for generation and embeddings (**custom registry** overrides/extensions, explicit endpoint semantics, policy-driven parameter mapping, **model access control**, **parameter validation/gating**, and pricing/limits).
-Install from **PyPI** for the core library, or clone from **GitHub** to run the demo UI and test scripts.
+## Examples & Quick Start
 
+After installation, check out the collection of ready-to-run example scripts [https://github.com/vrraj/llm-adapter/tree/main/examples](https://github.com/vrraj/llm-adapter/tree/main/examples) in the repository:
 
-GitHub: [https://github.com/vrraj/llm-adapter](https://github.com/vrraj/llm-adapter) • PyPI: [https://pypi.org/project/vrraj-llm-adapter/](https://pypi.org/project/vrraj-llm-adapter/)
+- `llm_adapter_import_example.py` — call signature and basic usage
+- `openai_embedding_example.py` — Embeddings
+- `streaming_call_example.py` — Streaming responses
+- `set_adapter_allowed_models.py` — Allowlist demo  
+- `custom_registry.py` — Extend with custom registry example
+
+You can run these locally once you install the package — see the full list below.
 
 ## LLM Adapter Interactive Playground
 
@@ -26,6 +32,7 @@ This package provides:
 
 - **Provider-agnostic** entrypoints for LLM generation and embeddings (call by **registry key**)
 - **Custom model registry** support (override/extend the defaults)
+- **Extensibility:** Add or override model definitions, parameter policies, and behaviors via a custom registry without modifying the core adapter.
 - **Model access control**: Environment-based allowlist to restrict which models can be used
 - **Parameter validation/gating**: Registry-controlled parameter filtering to prevent unauthorized/unsupported parameters
 - **Normalized response helper**: text, tool calls, reasoning tokens, and usage

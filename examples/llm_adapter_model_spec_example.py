@@ -13,8 +13,13 @@ Key benefits of ModelSpec:
 
 Usage:
     python examples/llm_adapter_model_spec_example.py
-"""
 
+Requirements:
+    - Set OPENAI_API_KEY and/or GEMINI_API_KEY for testing
+    - export OPENAI_API_KEY=...
+    - export GEMINI_API_KEY=...
+
+"""
 import sys
 import os
 from dotenv import load_dotenv

@@ -5,6 +5,24 @@ import os
 import sys
 from typing import Any, Iterable, Optional
 
+# Check for API keys
+has_openai = bool(os.getenv("OPENAI_API_KEY"))
+has_gemini = bool(os.getenv("GEMINI_API_KEY"))
+
+if not has_openai and not has_gemini:
+    print("❌ No API keys found!")
+    print("Set at least one of:")
+    print("  export OPENAI_API_KEY=...")
+    print("  export GEMINI_API_KEY=...")
+    print("Then run this example again.")
+    sys.exit(1)
+
+if has_openai:
+    print("✅ OPENAI_API_KEY is set")
+if has_gemini:
+    print("✅ GEMINI_API_KEY is set")
+print()
+
 
 def _infer_provider_from_model_key(model_key: str) -> str:
     mk = (model_key or "").strip()

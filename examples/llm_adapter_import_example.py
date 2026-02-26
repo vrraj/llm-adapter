@@ -3,9 +3,12 @@ Quick smoke test for vrraj-llm-adapter.
 
 Make sure you set:
   export OPENAI_API_KEY=...
+  export GEMINI_API_KEY=...
 
 Then run:
   python llm_adapter_import_example.py
+
+Note: At least one of these API keys is required for testing.
 """
 
 import os
@@ -34,10 +37,18 @@ def handle_llm_error(error: LLMError, title: str = "Error") -> None:
 
 
 def main():
-    if not os.getenv("OPENAI_API_KEY"):
-        raise SystemExit("Set OPENAI_API_KEY first: export OPENAI_API_KEY=... (or set it in your environment)")
-    if not os.getenv("GEMINI_API_KEY"):
-        raise SystemExit("Set GEMINI_API_KEY first: export GEMINI_API_KEY=... (or set it in your environment)")
+    # Check for API keys
+    has_openai = bool(os.getenv("OPENAI_API_KEY"))
+    has_gemini = bool(os.getenv("GEMINI_API_KEY"))
+    
+    if not has_openai and not has_gemini:
+        raise SystemExit("Set at least one API key first:\n  export OPENAI_API_KEY=...\n  export GEMINI_API_KEY=...\n\n(or set them in your environment)")
+    
+    if has_openai:
+        print("✅ OPENAI_API_KEY is set")
+    if has_gemini:
+        print("✅ GEMINI_API_KEY is set")
+    print()
 
     # Show allowed models if LLM_ADAPTER_ALLOWED_MODELS is set
     allowed_models = os.getenv("LLM_ADAPTER_ALLOWED_MODELS")

@@ -6,6 +6,8 @@ Usage:
 Requirements:
   - OPENAI_API_KEY must be set in the environment.
   - The llm-adapter package must be installed (e.g., `pip install -e .`).
+
+Note: This example specifically requires OPENAI_API_KEY for OpenAI embeddings.
 """
 
 from __future__ import annotations

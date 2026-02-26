@@ -5,6 +5,11 @@ of permitted model keys for security and control.
 
 Usage:
   python set_adapter_allowed_models.py
+
+Requirements:
+  - Set OPENAI_API_KEY and/or GEMINI_API_KEY for testing
+  - export OPENAI_API_KEY=...
+  - export GEMINI_API_KEY=...
 """
 
 import os
