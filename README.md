@@ -26,8 +26,8 @@ This package provides:
 
 - **Provider-agnostic** entrypoints for LLM generation and embeddings (call by **registry key**)
 - **Custom model registry** support (override/extend the defaults)
-- **� Model access control**: Environment-based allowlist to restrict which models can be used
-- **�️ Parameter validation/gating**: Registry-controlled parameter filtering to prevent unauthorized/unsupported parameters
+- **Model access control**: Environment-based allowlist to restrict which models can be used
+- **Parameter validation/gating**: Registry-controlled parameter filtering to prevent unauthorized/unsupported parameters
 - **Normalized response helper**: text, tool calls, reasoning tokens, and usage
 - **Registry-based pricing** metadata helpers
 - **ModelRegistry**: explicit endpoint routing (**OpenAI**: Responses, Chat Completions, Embeddings • **Gemini**: OpenAI-compatible endpoint, native SDK generation, native SDK embeddings) + model resolution, parameter mapping, and model policies (limits, pricing, reasoning/thinking)
@@ -35,6 +35,64 @@ This package provides:
 - **Streaming** supported at library level
 
 >**Note:** Demo UI and helper scripts are available when running from source.
+
+## Text Generation
+
+Generate text using any supported LLM provider with a unified API.
+
+```python
+from llm_adapter import llm_adapter, LLMError
+
+try:
+    response = llm_adapter.create(
+        model="openai:gpt-4o-mini",
+        input="Write a one-sentence bedtime story about a unicorn."
+    )
+    print(response.output_text)
+except LLMError as e:
+    print(f"Error: {e.code} - {e}")
+```
+
+### Response normalization
+
+For consistent response format across providers:
+
+```python
+from llm_adapter import llm_adapter, LLMError
+
+try:
+    response = llm_adapter.create(
+        model="openai:gpt-4o-mini",
+        input="Write a one-sentence bedtime story about a unicorn."
+    )
+    
+    # Normalize to standard format
+    normalized = llm_adapter.normalize_adapter_response(response)
+    print(normalized['text'])           # Generated text
+    print(normalized['usage'])          # Token usage
+    print(normalized['finish_reason'])  # Why generation stopped
+    
+except LLMError as e:
+    print(f"Error: {e.code} - {e}")
+```
+
+### Embeddings
+
+Generate embeddings with any supported provider:
+
+```python
+from llm_adapter import llm_adapter, LLMError
+
+try:
+    response = llm_adapter.create_embedding(
+        model="openai:text-embedding-3-small",
+        input="The quick brown fox jumps over the lazy dog"
+    )
+    print(f"Generated {len(response.data)} embeddings")
+    print(f"First embedding dimension: {len(response.data[0])}")
+except LLMError as e:
+    print(f"Error: {e.code} - {e}")
+```
 
 ## 🚀 Quick API Reference
 
@@ -90,15 +148,15 @@ validate_registry(custom_registry)
 try:
     resp = llm_adapter.create(model="...", input="...")
     
-    # Access normalized response
-    print(resp.output_text)           # Generated text
-    print(resp.usage)                  # Token usage
-    print(resp.model)                  # Model used
-    print(resp.finish_reason)          # Why generation stopped
+    # Normalize response for consistent format
+    normalized = llm_adapter.normalize_adapter_response(resp)
+    print(normalized['text'])           # Generated text
+    print(normalized['usage'])          # Token usage
+    print(normalized['finish_reason'])  # Why generation stopped
     
     # Tool calls (if any)
-    for tool_call in resp.tool_calls:
-        print(tool_call.function, tool_call.arguments)
+    for tool_call in normalized.get('tool_calls', []):
+        print(tool_call['function'], tool_call['arguments'])
         
 except LLMError as e:
     print(f"Error: {e.code} - {e}")  # Structured error handling
@@ -113,7 +171,7 @@ except LLMError as e:
 - ✅ **Usage limits** (max_output_tokens, rate limits)
 - ✅ **Pricing metadata** (cost tracking)
 - ✅ **Model capabilities** (reasoning, tools, etc.)
-- ✅ **Access control** (via LLM_ADAPTER_ALLOWED_MODELS)
+- ✅ **Access control** (environment-based allowlist)
 ```
 
 ### What You Get
@@ -329,7 +387,7 @@ pytest -m integration
   - `set_adapter_allowed_models.py` — Example for configuring model allowlists
   - `custom_registry.py` — Template for creating custom model registries
   - `import_custom_registry.py` — Example demonstrating custom registry usage
-  - `test_model_spec.py` — Comprehensive test script demonstrating ModelSpec usage with different providers and parameter configurations
+  - `llm_adapter_model_spec_example.py` — Comprehensive example demonstrating ModelSpec usage with different providers and parameter configurations
   - `test_magnitude_metadata.py` — Example showing magnitude metadata for embeddings
   - `test_provider_agnostic_embeddings.py` — Example demonstrating provider auto-detection
 - `tests/`
@@ -379,19 +437,9 @@ llm = LLMAdapter(model_registry=USER_REGISTRY)
 
 ### Restricting which models can be used (allowlist)
 
-You can restrict which registry keys may be used by setting an allowlist. When an allowlist is enabled, models must be referenced by **registry key** (for example: `openai:gpt-4o-mini`). Provider-native model names (for example: `gpt-4o-mini`) are rejected.
+You can restrict which registry keys may be used via an environment variable. When an allowlist is enabled, models must be referenced by **registry key** (for example: `openai:gpt-4o-mini`).
 
-#### Option A: via constructor (`allowed_model_keys`)
-
-```python
-from llm_adapter import LLMAdapter
-
-llm = LLMAdapter(
-    allowed_model_keys={"openai:gpt-4o-mini", "openai:embed_small"}
-)
-```
-
-#### Option B: via environment variable (`LLM_ADAPTER_ALLOWED_MODELS`)
+#### Environment Variable Configuration (`LLM_ADAPTER_ALLOWED_MODELS`)
 
 ```bash
 export LLM_ADAPTER_ALLOWED_MODELS="openai:gpt-4o-mini,openai:embed_small"
@@ -438,29 +486,6 @@ The LLM Adapter includes an **interactive demo UI** that allows you to test cust
 
 4. **Select your custom models:** The dropdown will now show both default and custom models
 
-    "openai:custom_reasoning_gpt-5-mini": ModelInfo(
-        key="openai:custom_reasoning_gpt-5-mini",  # Must match dict key
-        provider="openai",
-        model="gpt-5-mini",
-        endpoint="responses",
-        pricing=Pricing(input_per_mm=0.25, output_per_mm=2.00),
-        limits={"max_output_tokens": 2000},
-        capabilities={
-            "assistant_role": "assistant",
-            "reasoning_effort": True,
-        },
-        param_policy={
-            "allowed": {"max_output_tokens", "reasoning_effort", "reasoning", "tools", "tool_choice"},
-            "disabled": {"stream", "temperature", "top_p", "include_thoughts"}
-        },
-        reasoning_policy={
-            "mode": "openai_effort",
-            "default": "minimal",
-        },
-        reasoning_parameter=("reasoning_effort", "minimal"),
-    ),
-}
-
 # Validate your registry (recommended)
 validate_registry(REGISTRY, strict=False)
 ```
@@ -469,7 +494,7 @@ validate_registry(REGISTRY, strict=False)
 
 **Script:** `examples/import_custom_registry.py`
 
-Run this test script to verify your custom registry works correctly:
+Run this test script to verify your custom registry is set up correctly:
 
 ```bash
 cd llm-adapter
@@ -478,19 +503,13 @@ python examples/import_custom_registry.py
 ```
 
 This script validates:
-- ✅ Custom registry import and merging
-- ✅ Model availability (custom + default)
-- ✅ Pricing lookup for custom models
-- ✅ Registry validation
-- ✅ Model resolution functionality
+- Custom registry import and merging
+- Model availability (custom + default)
+- Pricing lookup for custom models
+- Registry validation
+- Model resolution functionality
 
 ### Live Updates
-
-**No reinstall required!** When you modify `examples/custom_registry.py`:
-
-1. Save your changes
-2. Toggle the checkbox in the UI (or make a new API call)
-3. Your changes are immediately available
 
 The custom registry is **dynamically imported** on each request, so you can iterate quickly on model configurations.
 
@@ -500,17 +519,16 @@ See these files for complete working examples:
 
 - **`examples/custom_registry.py`** - Sample custom registry with reasoning models
 - **`examples/import_custom_registry.py`** - Test script demonstrating programmatic usage
-- **`src/llm_adapter_demo/api.py`** - Backend implementation showing dynamic registry loading
 
 ### Production Usage
 
 For production use, you can:
 
-1. **Move your registry** to your application package
+1. **Create your registry** in your application package
 2. **Use the same pattern** as the demo: `LLMAdapter(model_registry=YOUR_REGISTRY)`
 3. **Validate before deployment** using `validate_registry()`
 
-The demo UI provides a sandbox for testing before integrating into your production code.
+> The demo UI provides a sandbox for testing before integrating into your production code.
 
 ## Custom Registry Override
 
@@ -522,16 +540,19 @@ For quick registry overrides without the demo UI:
    cp examples/custom_registry.py my_app/my_registry.py
    ```
 
-2. **Modify only what you need (or add new models)**
+2. **Define your complete model configurations**
    ```python
-   # Option A: Override existing model from template
+   # Option A: Override existing model (define complete configuration)
    "openai:custom_reasoning_o3-mini": ModelInfo(
-       # Keep most template defaults, change only what you need
-       pricing=Pricing(input_per_mm=0.8, output_per_mm=3.2),  # Custom pricing
-       limits={"max_output_tokens": 3000},  # Custom limits
+       provider="openai",
+       model="o3-mini", 
+       endpoint="chat_completions",
+       pricing=Pricing(input_per_mm=0.8, output_per_mm=3.2),
+       limits={"max_output_tokens": 3000},
+       # ... all required fields must be defined
    )
    
-   # Option B: Add entirely new model
+   # Option B: Add entirely new model (define complete configuration)
    "openai:custom-gpt4-turbo": ModelInfo(
        key="openai:custom-gpt4-turbo",
        provider="openai", 
@@ -551,49 +572,22 @@ For quick registry overrides without the demo UI:
    llm = LLMAdapter(model_registry=YOUR_REGISTRY)
    ```
 
-4. **(Optional) Use allowed_model_keys for strict environments**
-   ```python
-   # Restrict to only specific models
-   llm = LLMAdapter(
-       model_registry=YOUR_REGISTRY,
-       allowed_model_keys={"openai:gpt-4o-mini", "openai:embed_small"}
-   )
-   ```
+**Override Behavior:** Default registry + your custom entries (custom wins on conflicts). Same keys replace defaults, different keys are added.
 
 This approach gives you full control over model configurations while maintaining the same API interface.
 
-### Registry Override Behavior
-
-**Custom registries override default registry keys with the same key:**
-
-- **Same key**: Custom model replaces default model
-- **Different key**: Custom model is added to defaults
-- **Merged result**: Your custom registry + remaining defaults
-
-```python
-# Example: Override default gpt-4o-mini with custom pricing
-"openai:gpt-4o-mini": ModelInfo(
-    key="openai:gpt-4o-mini",  # Same key as default registry
-    provider="openai",
-    model="gpt-4o-mini",
-    endpoint="chat_completions",
-    pricing=Pricing(input_per_mm=0.2, output_per_mm=0.6),  # Custom pricing overrides default
-    # ... other fields
-)
-```
-
-**Result**: When you use `LLMAdapter(model_registry=YOUR_REGISTRY)`, the custom `openai:gpt-4o-mini` completely replaces the default one.
+>**Result**: When you use `LLMAdapter(model_registry=YOUR_REGISTRY)`, your custom entries merge with defaults. Same keys are overridden, different keys are added.
 
 ### Endpoint semantics (important)
 
 This standalone package uses these routing semantics:
 
 - `endpoint="responses"`
-  - Uses OpenAI **Responses API** (`client.responses.create(...)`).
+  - Uses OpenAI **Responses** (`client.responses.create(...)`).
 - `endpoint="chat_completions"`
-  - Uses OpenAI **Chat Completions API** (`client.chat.completions.create(...)`).
+  - Uses OpenAI **Chat Completions** (`client.chat.completions.create(...)`).
 - `endpoint="embeddings"`
-  - Uses OpenAI **embeddings create** (`client.embeddings.create(...)`).
+  - Uses OpenAI **embeddings** (`client.embeddings.create(...)`).
 - `endpoint="gemini_sdk"`
   - Uses Gemini native **SDK** (`google-genai` `models.generate_content(...)` / `generate_content_stream(...)`).
 - `endpoint="embed_content"`
@@ -857,7 +851,7 @@ resp = llm_adapter.create_embedding(
 
 `ModelSpec` provides a type-safe, reusable way to configure model parameters as an alternative to passing individual parameters.
 
->**Note**: See `examples/test_model_spec.py` for a test script demonstrating ModelSpec usage with different providers and parameter configurations.
+>**Note**: See `examples/llm_adapter_model_spec_example.py` for a comprehensive example demonstrating ModelSpec usage with different providers and parameter configurations.
 
 ### Using ModelSpec
 
@@ -1157,25 +1151,23 @@ Supported env vars:
 
 **All supported variables:**
 - `OPENAI_API_KEY`
-- `OPENAI_BASE_URL` (optional) — override the OpenAI-compatible endpoint (proxy / gateway / self-hosted / Azure-like setups). If unset, the OpenAI SDK default is used.
 - `GEMINI_API_KEY`
 - `GEMINI_OPENAI_BASE_URL`
-- `LLM_ADAPTER_ALLOWED_MODELS` (comma-separated list of allowed model keys) - Restrict which models can be used. See **Model Allowlist** section below for details.
+- `LLM_ADAPTER_ALLOWED_MODELS` (comma-separated list) - Restrict which models can be used. See **Model Allowlist** section below.
 
 
 ## Model Allowlist (Access Control)
 
-The `LLM_ADAPTER_ALLOWED_MODELS` environment variable allows you to restrict which models can be used, providing an additional layer of security and cost control.
+The `LLM_ADAPTER_ALLOWED_MODELS` environment variable allows you to restrict which models can be used, providing an additional layer of security and cost control - *by default, all models are allowed*.
 
 ### How It Works
 
 When the allowlist is enabled, only models explicitly listed in the allowlist can be used. Attempts to use non-allowed models will raise an `LLMError` with `code="model_not_allowed"`.
 
-### Configuration Methods
+### Examples
 
-#### Environment Variable (Only Method)
 ```bash
-# Allow specific models
+# Set specific models
 export LLM_ADAPTER_ALLOWED_MODELS="openai:gpt-4o-mini,gemini:native-sdk-reasoning-2.5-flash"
 
 # Allow all models (empty string or unset)
@@ -1185,27 +1177,11 @@ export LLM_ADAPTER_ALLOWED_MODELS=""
 
 ### Behavior
 
-| `LLM_ADAPTER_ALLOWED_MODELS` | Behavior |
-|-------------------------------|----------|
-| Not set | **All models allowed** (no restriction) |
-| Empty string (`""`) | **All models allowed** (no restriction) |
+| Setting | Behavior |
+|---------|----------|
+| Not set or empty | **All models allowed** |
 | Comma-separated list | **Only listed models allowed** |
 
-### Error Handling
-
-When a model is not allowed:
-```python
-from llm_adapter import LLMAdapter, LLMError
-
-adapter = LLMAdapter()  # With allowlist enabled
-
-try:
-    resp = adapter.create(model="disallowed-model", input="Hello")
-except LLMError as e:
-    if e.code == "model_not_allowed":
-        print(f"Model not permitted: {e.message}")
-        # Output: Model 'disallowed-model' is not permitted by allowlist
-```
 
 ### Use Cases
 
@@ -1213,11 +1189,6 @@ except LLMError as e:
 - **Cost control**: Limit usage to specific pricing tiers
 - **Security**: Prevent access to experimental or powerful models
 - **Multi-tenant apps**: Different allowlists per customer/tenant
-
-### Precedence Order
-
-1. **Environment variable** (global setting)
-2. **None** (no restriction - default)
 
 ### Examples
 
@@ -1236,7 +1207,6 @@ import os
 from llm_adapter import llm_adapter
 
 # Use environment variable for allowlist control
-# LLM_ADAPTER_ALLOWED_MODELS is read automatically
 resp = llm_adapter.create(
     model="openai:gpt-4o-mini",
     input="Hello",
@@ -1254,8 +1224,7 @@ custom_registry = {
     "my-company:custom-model": ModelInfo(provider="openai", model="gpt-4-turbo", endpoint="chat_completions")
 }
 
-# Environment variable: LLM_ADAPTER_ALLOWED_MODELS="openai:gpt-4o-mini,my-company:custom-model"
-
+# Environment variable allows specific models from both registries
 adapter = LLMAdapter(model_registry=custom_registry)
 
 # ✅ Allowed: In allowlist (from default or custom registry)
@@ -1267,7 +1236,6 @@ adapter.create(model="my-company:custom-model", input="Hello")
 
 **Key Point:** Allowlist checks registry keys, not provider-native model names.
 
-### Error Handling
 
 The adapter raises structured `LLMError` exceptions for various failure conditions. Always wrap API calls in try-catch blocks.
 
@@ -1440,7 +1408,7 @@ Demonstrates how to create and use custom model registries.
 
 #### ModelSpec Configuration
 ```bash
-python examples/test_model_spec.py
+python examples/llm_adapter_model_spec_example.py
 ```
 
 Comprehensive example showing ModelSpec usage with different providers and parameter configurations.

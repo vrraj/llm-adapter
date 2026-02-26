@@ -61,8 +61,17 @@ def main():
         )
 
         print("\n=== Chat Response ===")
+        print("Raw response from llm_adapter.create():")
         print(resp.output_text)
         print("Usage:", resp.usage)
+        
+        # ---- Normalize Response Demo ----
+        print("\n=== Normalized Response Demo ===")
+        normalized = llm_adapter.normalize_adapter_response(resp)
+        print("Normalized response type:", type(normalized))
+        print("Normalized text:", normalized.get('text', 'None'))
+        print("Normalized usage:", normalized.get('usage', 'None'))
+        print("Normalized model:", normalized.get('model', 'None'))
     except LLMError as e:
         handle_llm_error(e, "Chat Error")
 
