@@ -52,32 +52,9 @@ Notes:
 - `normalize_adapter_response()` is a local transform (no additional provider request).
 ```
 
-If you want a stable schema for application code, normalize to `LLMResult` (recommended as you add more models, and as the adapter adds support for additional providers over time).
-For user-facing text, prefer `normalized["text"]` (Gemini can include `<thought>...</thought>` blocks in `resp.output_text` depending on configuration).
-If you explicitly want raw provider output (including any thought traces), use `resp.output_text`.
-Normalization is a local transform.
+Normalize to `LLMResult` for stable, application-facing output.
+Use `normalized["text"]` for display-safe text; `resp.output_text` may include provider thought markup depending on model configuration.
 
-### Optional: small helper wrapper
-
-If you prefer a one-step call in your own application code, you can wrap both calls:
-
-```python
-from llm_adapter import llm_adapter
-
-
-def create_result(**kwargs):
-    resp = llm_adapter.create(**kwargs)
-    return llm_adapter.normalize_adapter_response(resp)
-
-result = create_result(
-    model="openai:gpt-4o-mini",
-    input="Hello"
-)
-
-print(result["text"])
-```
-
-This keeps the library surface minimal while letting your app standardize on `LLMResult`.
 
 ## Public API (overview)
 
@@ -137,7 +114,7 @@ Top-level fields:
 
 The repo includes a small FastAPI demo + UI to try models, inspect registry metadata, and view normalized responses.
 
-![LLM Adapter Interactive Playground](https://raw.githubusercontent.com/vrraj/llm-adapter/main/images/llm_adapter_interactive_playground.png)
+![LLM Adapter Interactive Playground](https://github.com/vrraj/llm-adapter/blob/main/images/llm_adapter_interactive_playground.png)
 
 ➡️ Run it from GitHub: see **Development & Demo UI** in the expanded section below.
 
@@ -159,11 +136,33 @@ Try models, inspect registry metadata, adjust parameters, and view normalized re
 
 > See section **[Development & Demo UI](#development-and-demo-ui)** for instructions on how to run the interactive playground.
 
-![LLM Adapter Interactive Playground](https://raw.githubusercontent.com/vrraj/llm-adapter/main/images/llm_adapter_interactive_playground.png)
+![LLM Adapter Interactive Playground](https://github.com/vrraj/llm-adapter/blob/main/images/llm_adapter_interactive_playground.png)
 
 ## Examples & Getting Started
 
 Install the adapter from PyPI, then download and run the standalone example scripts to explore common usage patterns such as chat, embeddings, streaming, and custom registry overrides.
+
+### Application Wrapper Pattern
+
+Some applications prefer a one-step helper that standardizes on `LLMResult` internally:
+
+```python
+from llm_adapter import llm_adapter
+
+
+def create_result(**kwargs):
+    resp = llm_adapter.create(**kwargs)
+    return llm_adapter.normalize_adapter_response(resp)
+
+result = create_result(
+    model="openai:gpt-4o-mini",
+    input="Hello"
+)
+
+print(result["text"])
+```
+
+This pattern keeps the library surface minimal while allowing your application to standardize on the normalized contract.
 
 ### 📥 Run Standalone Examples
 

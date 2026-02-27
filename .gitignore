@@ -24,6 +24,15 @@ wheels/
 .venv/
 venv/
 ENV/
+.build-env/
+clean-test/
+publish-env/
+build_env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Environment variables
 .env
@@ -31,6 +40,8 @@ ENV/
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # Logs
 logs/
@@ -41,3 +52,21 @@ logs/
 
 # OS
 .DS_Store
+Thumbs.db
+
+# Build artifacts
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Cache
+.cache/
+.mypy_cache/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
