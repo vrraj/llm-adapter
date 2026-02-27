@@ -62,6 +62,8 @@ for key in adapter.model_registry.keys():
 
 The repo includes a small FastAPI demo + UI to try models, inspect registry metadata, and view normalized responses.
 
+It also includes developer tooling to test **custom model registries** (overrides/extensions) end-to-end in the UI—see **Development And Demo UI** in the expanded section below.
+
 ![LLM Adapter Interactive Playground](https://github.com/vrraj/llm-adapter/blob/main/images/llm_adapter_interactive_playground.png)
 
 >➡️ Run it from GitHub: see **Development & Demo UI** in the expanded section below.
@@ -210,103 +212,6 @@ python llm_adapter_basic_usage.py
 -  set_adapter_allowed_models.py - Allowlist demo
    *(See "Model Allowlist (Access Control)" section for environment variable details)*
 -  custom_registry.py - Custom registry
-
-## API Reference
-
-📋 **For complete method signatures, parameter details, and response structures, see: [API_REFERENCE.md](API_REFERENCE.md).**
-
-Below is a quick overview of the main methods.
-
-#### Generate Response (`llm_adapter.create(...)`)
-Standard contract listed below. Additional model specific parameters can be passed as kwargs (limited by the param_policy defined in the model registry).
-
-```python
-response: AdapterResponse = llm_adapter.create(
-    model: str = None,
-    input: str | list[dict] = None,
-    spec: Optional[ModelSpec] = None,
-    reasoning_effort: Optional[str] = None,
-    max_output_tokens: Optional[int] = None,
-    temperature: Optional[float] = None,
-    top_p: Optional[float] = None,
-    tools: Optional[list] = None,
-    tool_choice: Optional[str] = None,
-    include_thoughts: Optional[bool] = False,
-    stream: bool = False,
-    **kwargs
-)
-```
-
-- **model**: registry model key (e.g., "openai:gpt-4o-mini")
-- **input**: prompt text or structured chat messages
-- **spec**: alternative structured configuration (ModelSpec)
-- **reasoning_effort**: adapter-level reasoning hint
-- **Common policy-controlled parameters**: max_output_tokens, temperature, top_p
-- **tools, tool_choice**: for structured tool invocation
-- **include_thoughts**: include reasoning traces when supported
-- **stream**: stream tokens as events
-
-#### Normalize Response (`llm_adapter.normalize_adapter_response(...)`)
-Converts provider-specific AdapterResponse to standardized LLMResult format.
-
-```python
-normalized: LLMResult = llm_adapter.normalize_adapter_response(
-    resp: AdapterResponse,
-    provider: Optional[str] = None,
-    model_key: Optional[str] = None
-)
-```
-
-**LLMResult Structure:**
-```python
-class LLMResult(TypedDict, total=False):
-    provider: str
-    model: str
-    id: Optional[str]
-    created_at: Optional[float]
-    text: str
-    reasoning: Optional[str]              # Reasoning content (Gemini)
-    role: str
-    status: str
-    finish_reason: Optional[str]
-    usage: "LLMUsage"                    # Standardized usage metrics
-    tool_calls: List["LLMToolCall"]
-    metadata: Optional[Dict[str, Any]]
-    raw: Any                              # Original provider response
-```
-
-#### Generate Embeddings (`llm_adapter.create_embedding(...)`)
-Provider-agnostic embedding generation.
-
-```python
-response: EmbeddingResponse = llm_adapter.create_embedding(
-    model: str = None,
-    input: str | list[str] = None,
-    spec: Optional[ModelSpec] = None,
-    dimensions: Optional[int] = None,
-    **kwargs
-)
-```
-
-- **model**: registry model key (e.g., "openai:embed_small")
-- **input**: text or list of texts to embed
-- **spec**: alternative structured configuration (ModelSpec)
-- **dimensions**: output embedding dimensions (when supported)
-
-#### Model Pricing (`llm_adapter.get_pricing_for_model(...)`)
-Access pricing metadata for any model in the registry.
-
-```python
-pricing: Optional[Pricing] = llm_adapter.get_pricing_for_model(model_key: str)
-```
-
-**Pricing Structure:**
-```python
-class Pricing:
-    input_per_mm: Optional[float]         # Cost per 1M input tokens
-    output_per_mm: Optional[float]        # Cost per 1M output tokens
-    cached_input_per_mm: Optional[float]  # Cost per 1M cached input tokens
-```
 
 ### Text Generation
 
