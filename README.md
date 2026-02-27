@@ -15,6 +15,9 @@ pip install vrraj-llm-adapter
 
 
 ## Quickstart
+> Requires `OPENAI_API_KEY` or `GEMINI_API_KEY` set in your environment.
+> Use a registry model key for `model=` (examples: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`, `openai:embed_small`).
+> See the full list in MODEL_REGISTRY.md or print keys programmatically (snippet below).
 
 ```python
 from llm_adapter import llm_adapter
@@ -32,29 +35,37 @@ print(result["text"])
 print(result["usage"])
 ```
 
-## Recommended flow (create → normalize)
+### Discover available model keys
 
-The adapter intentionally separates the **provider boundary** from your app-facing schema:
+The package ships with a default registry. To list available keys:
 
-```text
-User Input
-   │
-   ▼
-llm_adapter.create(...)  ─────────────►  AdapterResponse
-   │                                  (provider-aware: raw responses, metadata)
-   │
-   ▼
-llm_adapter.normalize_adapter_response(resp)  ─►  LLMResult
-                                          (stable dict schema for apps)
+```python
+from llm_adapter import LLMAdapter
 
-Notes:
-- `create()` performs the network call.
-- `normalize_adapter_response()` is a local transform (no additional provider request).
+adapter = LLMAdapter()
+for key in adapter.model_registry.keys():
+    print(key)
 ```
 
-Normalize to `LLMResult` for stable, application-facing output.
-Use `normalized["text"]` for display-safe text; `resp.output_text` may include provider thought markup depending on model configuration.
+Full registry documentation: https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md
 
+## What you get
+
+- **One interface** for generation + embeddings across providers
+- **Extensible registry-driven routing** (provider, endpoint, capabilities, limits)
+- **Parameter policies** (allowed/disabled filtering per model)
+- **Normalized responses** (text, tool calls, reasoning, usage)
+- **Access control** via allowlist env var (`LLM_ADAPTER_ALLOWED_MODELS`)
+- **Pricing metadata** in registry for cost visibility
+
+
+## Interactive Playground (GitHub)
+
+The repo includes a small FastAPI demo + UI to try models, inspect registry metadata, and view normalized responses.
+
+![LLM Adapter Interactive Playground](https://github.com/vrraj/llm-adapter/blob/main/images/llm_adapter_interactive_playground.png)
+
+>➡️ Run it from GitHub: see **Development & Demo UI** in the expanded section below.
 
 ## Public API (overview)
 
@@ -62,6 +73,8 @@ Use `normalized["text"]` for display-safe text; `resp.output_text` may include p
 - `llm_adapter.normalize_adapter_response(...) -> LLMResult` — normalize `AdapterResponse` into a consistent dict schema
 - `llm_adapter.create_embedding(...) -> EmbeddingResponse` — embeddings across providers
 - `llm_adapter.get_pricing_for_model(...) -> Pricing | None` — pricing metadata lookup from the registry
+
+>📋 For **complete method signatures, parameter details, and full response structures**, see: https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md
 
 ### AdapterResponse (from `create`)
 
@@ -99,26 +112,32 @@ Top-level fields:
 }
 ```
 
-📋 For **complete method signatures, parameter details, and full response structures**, see: https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md
+### Recommended flow (create → normalize)
 
-## What you get
+The adapter intentionally separates the **provider boundary** from your app-facing schema:
 
-- **One interface** for generation + embeddings across providers
-- **Extensible registry-driven routing** (provider, endpoint, capabilities, limits)
-- **Parameter policies** (allowed/disabled filtering per model)
-- **Normalized responses** (text, tool calls, reasoning, usage)
-- **Access control** via allowlist env var (`LLM_ADAPTER_ALLOWED_MODELS`)
-- **Pricing metadata** in registry for cost visibility
+```text
+User Input
+   │
+   ▼
+llm_adapter.create(...)  ─────────────►  AdapterResponse
+   │                                  (provider-aware: raw responses, metadata)
+   │
+   ▼
+llm_adapter.normalize_adapter_response(resp)  ─►  LLMResult
+                                          (stable dict schema for apps)
 
-## Interactive Playground (GitHub)
+Notes:
+- `create()` performs the network call.
+- `normalize_adapter_response()` is a local transform (no additional provider request).
+```
 
-The repo includes a small FastAPI demo + UI to try models, inspect registry metadata, and view normalized responses.
+Normalize to `LLMResult` for stable, application-facing output.
+Use `normalized["text"]` for display-safe text; `resp.output_text` may include provider thought markup depending on model configuration.
 
-![LLM Adapter Interactive Playground](https://github.com/vrraj/llm-adapter/blob/main/images/llm_adapter_interactive_playground.png)
 
-➡️ Run it from GitHub: see **Development & Demo UI** in the expanded section below.
 
-## Quick links (recommended next)
+## Quick links (for developers)
 
 - **📋 Complete API Reference:** https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md
 - **Model Registry docs:** https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md
@@ -142,7 +161,7 @@ Try models, inspect registry metadata, adjust parameters, and view normalized re
 
 Install the adapter from PyPI, then download and run the standalone example scripts to explore common usage patterns such as chat, embeddings, streaming, and custom registry overrides.
 
-### Application Wrapper Pattern
+### Text Generation - Application Wrapper Pattern
 
 Some applications prefer a one-step helper that standardizes on `LLMResult` internally:
 
@@ -299,20 +318,8 @@ class Pricing:
 
 ### Text Generation
 
-Generate text using any supported LLM provider.
-
-```python
-from llm_adapter import llm_adapter, LLMError
-
-try:
-    response = llm_adapter.create(
-        model="openai:gpt-4o-mini",
-        input="Explain quantum entanglement in simple terms."
-    )
-    print(response.output_text)
-except LLMError as e:
-    print(f"Error: {e.code} - {e}")
-```
+For application-facing output, use the create → normalize flow (see **Text Generation - Application Wrapper Pattern** above).
+If you need the raw provider boundary object for debugging, `llm_adapter.create(...)` returns an `AdapterResponse`.
 
 #### Available Models
 
