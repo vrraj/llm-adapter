@@ -13,6 +13,7 @@ Provider-agnostic LLM adapter for **text generation + embeddings** with a **regi
 pip install vrraj-llm-adapter
 ```
 
+
 ## 60-second example
 
 ```python
@@ -28,6 +29,53 @@ print(resp.output_text)
 print(resp.usage)
 ```
 
+## Recommended flow (create → normalize)
+
+The adapter intentionally separates the **provider boundary** from your app-facing schema:
+
+```text
+User Input
+   │
+   ▼
+llm_adapter.create(...)  ─────────────►  AdapterResponse
+   │                                  (provider-aware: raw responses, metadata)
+   │
+   ▼
+llm_adapter.normalize_adapter_response(resp)  ─►  LLMResult
+                                          (stable dict schema for apps)
+
+Notes:
+- `create()` performs the network call.
+- `normalize_adapter_response()` is a local transform (no additional provider request).
+```
+
+If you want a stable schema for application code, normalize to `LLMResult` (recommended as you add more models, and as the adapter adds support for additional providers over time).
+For user-facing text, prefer `normalized["text"]` (Gemini can include `<thought>...</thought>` blocks in `resp.output_text` depending on configuration).
+If you explicitly want raw provider output (including any thought traces), use `resp.output_text`.
+Normalization is a local transform.
+
+### Optional: small helper wrapper
+
+If you prefer a one-step call in your own application code, you can wrap both calls:
+
+```python
+from llm_adapter import llm_adapter
+
+
+def create_result(**kwargs):
+    resp = llm_adapter.create(**kwargs)
+    return llm_adapter.normalize_adapter_response(resp)
+
+result = create_result(
+    model="openai:gpt-4o-mini",
+    input="Hello"
+)
+
+print(result["text"])
+```
+
+This keeps the library surface minimal while letting your app standardize on `LLMResult`.
+
 ## Public API (overview)
 
 - `llm_adapter.create(...) -> AdapterResponse` — text generation (supports tools + optional streaming)
@@ -37,7 +85,7 @@ print(resp.usage)
 
 ### AdapterResponse (from `create`)
 
-Top-level fields (the stable surface):
+Top-level fields (stable surface; note: `output_text` may include provider thought markup for some Gemini paths):
 
 ```python
 AdapterResponse(
@@ -137,6 +185,7 @@ python llm_adapter_basic_usage.py
 
 **Core Examples:**
 -  llm_adapter_basic_usage.py - Basic usage and normalization
+-  create_and_normalize_example.py - Recommended create → normalize flow (Gemini-safe)
 -  llm_adapter_model_spec_example.py - ModelSpec configuration
 
 **Provider-Specific Examples:**

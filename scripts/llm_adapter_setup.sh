@@ -81,3 +81,4 @@ echo "     or background service: make start-bg"
 echo ""
 echo "  3) Open the demo UI: http://localhost:8100/ui/"
 
+
