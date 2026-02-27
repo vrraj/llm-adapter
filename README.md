@@ -14,7 +14,7 @@ pip install vrraj-llm-adapter
 ```
 
 
-## 60-second example
+## Quickstart
 
 ```python
 from llm_adapter import llm_adapter
@@ -25,8 +25,11 @@ resp = llm_adapter.create(
     max_output_tokens=100,
 )
 
-print(resp.output_text)
-print(resp.usage)
+# Normalize to stable app-facing schema
+result = llm_adapter.normalize_adapter_response(resp)
+
+print(result["text"])
+print(result["usage"])
 ```
 
 ## Recommended flow (create → normalize)
