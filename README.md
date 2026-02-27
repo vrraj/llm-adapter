@@ -15,9 +15,9 @@ pip install vrraj-llm-adapter
 
 
 ## Quickstart
-> Requires `OPENAI_API_KEY` or `GEMINI_API_KEY` set in your environment.
-> Use a registry model key for `model=` (examples: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`).
-> See the full list in MODEL_REGISTRY.md or print keys programmatically (snippet below).
+Requires `OPENAI_API_KEY` or `GEMINI_API_KEY` set in your environment. Use a registry model key for `model=` (examples: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`).
+
+See the full list in MODEL_REGISTRY.md [here](https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md) or **print keys** programmatically (snippet below).
 
 ```python
 from llm_adapter import llm_adapter
@@ -47,7 +47,6 @@ for key in adapter.model_registry.keys():
     print(key)
 ```
 
-Full registry documentation: https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md
 
 ## What you get
 
@@ -74,7 +73,7 @@ The repo includes a small FastAPI demo + UI to try models, inspect registry meta
 - `llm_adapter.create_embedding(...) -> EmbeddingResponse` — embeddings across providers
 - `llm_adapter.get_pricing_for_model(...) -> Pricing | None` — pricing metadata lookup from the registry
 
->📋 For **complete method signatures, parameter details, and full response structures**, see: https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md
+>📋 For **complete method signatures, parameter details, and full response structures**, see: [API_REFERENCE.md](API_REFERENCE.md)
 
 ### AdapterResponse (from `create`)
 
@@ -139,9 +138,9 @@ Use `normalized["text"]` for display-safe text; `resp.output_text` may include p
 
 ## Quick links (for developers)
 
-- **📋 Complete API Reference:** https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md
+- **Complete API Reference:** [API_REFERENCE.md](API_REFERENCE.md)
 - **Model Registry docs:** https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md
-- **Examples folder:** https://github.com/vrraj/llm-adapter/tree/main/examples
+- **Ready to use Examples:** https://github.com/vrraj/llm-adapter/tree/main/examples
 - **Dev notes:** https://github.com/vrraj/llm-adapter/blob/main/DEVELOPMENT.md
 
 ---
@@ -149,13 +148,6 @@ Use `normalized["text"]` for display-safe text; `resp.output_text` may include p
 <details>
 <summary><strong>Full GitHub README (expand)</strong></summary>
 
-## LLM Adapter Interactive Playground
-
-Try models, inspect registry metadata, adjust parameters, and view normalized responses using the built-in test UI.
-
-> See section **[Development & Demo UI](#development-and-demo-ui)** for instructions on how to run the interactive playground.
-
-![LLM Adapter Interactive Playground](https://github.com/vrraj/llm-adapter/blob/main/images/llm_adapter_interactive_playground.png)
 
 ## Examples & Getting Started
 
@@ -221,7 +213,7 @@ python llm_adapter_basic_usage.py
 
 ## API Reference
 
-📋 **For complete method signatures, parameter details, and response structures, see the [API Reference](https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md).**
+📋 **For complete method signatures, parameter details, and response structures, see: [API_REFERENCE.md](API_REFERENCE.md).**
 
 Below is a quick overview of the main methods.
 

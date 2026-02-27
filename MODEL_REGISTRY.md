@@ -282,11 +282,11 @@ ModelInfo(
 
 | Endpoint | OpenAI | Gemini | Description |
 |----------|--------|--------|-------------|
-| `responses` | ✅ OpenAI Responses API | ❌ | New OpenAI API with built-in reasoning |
-| `chat_completions` | ✅ Chat Completions API | ✅ OpenAI-compatible endpoint | Standard chat API |
-| `embeddings` | ✅ Embeddings API | ✅ OpenAI-compatible embeddings | Standard embeddings |
-| `gemini_sdk` | ❌ | ✅ Native SDK | Gemini native generation |
-| `embed_content` | ❌ | ✅ Native SDK | Gemini native embeddings |
+| `responses` | OpenAI Responses API | | New OpenAI API with built-in reasoning |
+| `chat_completions` | Chat Completions API | OpenAI-compatible endpoint | Standard chat API |
+| `embeddings` | Embeddings API | OpenAI-compatible embeddings | Standard embeddings |
+| `gemini_sdk` | | Native SDK | Gemini native generation |
+| `embed_content` | | Native SDK | Gemini native embeddings |
 
 ### Configuration Fields
 
