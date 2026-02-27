@@ -16,7 +16,7 @@ pip install vrraj-llm-adapter
 
 ## Quickstart
 > Requires `OPENAI_API_KEY` or `GEMINI_API_KEY` set in your environment.
-> Use a registry model key for `model=` (examples: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`, `openai:embed_small`).
+> Use a registry model key for `model=` (examples: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`).
 > See the full list in MODEL_REGISTRY.md or print keys programmatically (snippet below).
 
 ```python

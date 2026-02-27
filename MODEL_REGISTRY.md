@@ -4,6 +4,28 @@ The model registry maps stable **registry keys** (e.g. `openai:gpt-4o-mini`) to 
 
 ## Discovering Available Models
 
+### Quick Model Reference (Default model_registry.py)
+
+Here are the default registry keys included with the package:
+
+#### OpenAI Models
+- `openai:gpt-4o-mini` - Text generation (Responses API)
+- `openai:gpt-4o` - Text generation (Responses API)  
+- `openai:chat_gpt-4o-mini` - Text generation (Chat Completions)
+- `openai:chat_gpt-4o` - Text generation (Chat Completions)
+- `openai:reasoning_o3-mini` - Reasoning model
+- `openai:reasoning_gpt-5-mini` - Reasoning model
+- `openai:embed_small` - Embeddings (1536 dimensions)
+- `openai:embed_large` - Embeddings (3072 dimensions)
+
+#### Gemini Models
+- `gemini:openai-2.5-flash-lite` - Text generation (OpenAI-compatible)
+- `gemini:openai-3-flash-preview` - Text generation with reasoning (OpenAI-compatible)
+- `gemini:native-sdk-3-flash-preview` - Text generation (Native SDK)
+- `gemini:openai-reasoning-2.5-flash` - Budget-based reasoning (OpenAI-compatible)
+- `gemini:native-sdk-reasoning-2.5-flash` - Budget-based reasoning (Native SDK)
+- `gemini:native-embed` - Embeddings (Native SDK)
+
 ### For Installed Packages (pip install users)
 
 After installing via pip, you can discover all available registry keys programmatically:
@@ -39,28 +61,6 @@ print(f"Gemini models: {gemini_models}")
 if "openai:gpt-4o-mini" in adapter.model_registry:
     print("openai:gpt-4o-mini is available!")
 ```
-
-### Quick Model Reference
-
-Here are the default registry keys included with the package:
-
-#### OpenAI Models
-- `openai:gpt-4o-mini` - Text generation (Responses API)
-- `openai:gpt-4o` - Text generation (Responses API)  
-- `openai:chat_gpt-4o-mini` - Text generation (Chat Completions)
-- `openai:chat_gpt-4o` - Text generation (Chat Completions)
-- `openai:reasoning_o3-mini` - Reasoning model
-- `openai:reasoning_gpt-5-mini` - Reasoning model
-- `openai:embed_small` - Embeddings (1536 dimensions)
-- `openai:embed_large` - Embeddings (3072 dimensions)
-
-#### Gemini Models
-- `gemini:openai-2.5-flash-lite` - Text generation (OpenAI-compatible)
-- `gemini:openai-3-flash-preview` - Text generation with reasoning (OpenAI-compatible)
-- `gemini:native-sdk-3-flash-preview` - Text generation (Native SDK)
-- `gemini:openai-reasoning-2.5-flash` - Budget-based reasoning (OpenAI-compatible)
-- `gemini:native-sdk-reasoning-2.5-flash` - Budget-based reasoning (Native SDK)
-- `gemini:native-embed` - Embeddings (Native SDK)
 
 ## ModelInfo Structure
 
