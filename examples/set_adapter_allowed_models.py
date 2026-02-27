@@ -10,6 +10,12 @@ Requirements:
   - Set OPENAI_API_KEY and/or GEMINI_API_KEY for testing
   - export OPENAI_API_KEY=...
   - export GEMINI_API_KEY=...
+
+Environment Variables:
+  - LLM_ADAPTER_ALLOWED_MODELS - Comma-separated list of allowed model keys
+    Example: export LLM_ADAPTER_ALLOWED_MODELS="openai:gpt-4o-mini,gemini:native-embed"
+    
+Note: See README "Model Allowlist (Access Control)" section for complete documentation.
 """
 
 import os

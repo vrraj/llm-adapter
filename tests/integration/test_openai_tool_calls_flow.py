@@ -169,7 +169,7 @@ def test_openai_responses_create_populates_adapter_tool_calls():
     if not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY not set")
 
-    model_key = "openai:reasoning_gpt-4o-mini"
+    model_key = "openai:reasoning_o3-mini"
 
     adapter = LLMAdapter()
 

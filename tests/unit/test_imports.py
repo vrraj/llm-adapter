@@ -13,14 +13,14 @@ def test_package_import():
         print(f"❌ Import failed: {e}")
         return False
 
-def test_llm_adapter_import():
-    """Test that main llm_adapter module can be imported."""
+def test_llm_adapter_singleton_import():
+    """Test that llm_adapter singleton instance can be imported."""
     try:
         from llm_adapter import llm_adapter
-        print("✅ llm_adapter module imports successfully")
+        print("✅ llm_adapter singleton imports successfully")
         return True
     except ImportError as e:
-        print(f"❌ llm_adapter import failed: {e}")
+        print(f"❌ llm_adapter singleton import failed: {e}")
         return False
 
 def test_modelspec_import():
@@ -52,7 +52,7 @@ def test_registry_import():
 if __name__ == "__main__":
     success = True
     success &= test_package_import()
-    success &= test_llm_adapter_import()
+    success &= test_llm_adapter_singleton_import()
     success &= test_modelspec_import()
     success &= test_registry_import()
     

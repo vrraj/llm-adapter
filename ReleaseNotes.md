@@ -1,5 +1,66 @@
 # Release Notes
 
+## Version 0.3.0 - Documentation Restructuring & API Clarity
+
+### Overview
+**Major Documentation Enhancement**: Complete documentation restructuring with improved API clarity, consolidated examples, and enhanced developer experience.
+
+### Key Features
+- **📋 Comprehensive API Reference**: New `API_REFERENCE.md` with complete method signatures, parameter details, and response structures
+- **🎯 Stability Indicators**: Clear distinction between guaranteed API surfaces and debug/internal fields
+- **📚 Consolidated Examples**: Restructured examples with `examples/README.md` providing comprehensive navigation
+- **🔄 Improved Naming**: Renamed key examples for clarity (`llm_adapter_import_example.py` → `llm_adapter_basic_usage.py`)
+- **✅ Model Key Consistency**: Ensured all documentation uses correct registry keys across all files
+- **🧹 Documentation Cleanup**: Removed redundant files and consolidated information
+
+### Documentation Structure Changes
+- **New**: `API_REFERENCE.md` - Complete API documentation with stability indicators
+- **New**: `examples/README.md` - Comprehensive examples guide with learning paths
+- **Removed**: `AdapterResponse.md` - Content consolidated into API reference
+- **Removed**: `EMBEDDING_MAGNITUDE.md` - Content consolidated into API reference
+- **Updated**: `README.md` - Enhanced with quick API overview and better navigation
+
+### API Clarity Improvements
+- **Stability Indicators**: ✅ Guaranteed fields vs 🔧 Debug/Opaque fields clearly marked
+- **Singleton Clarification**: Added note about `llm_adapter` being a convenience singleton instance
+- **Method Naming Consistency**: Standardized on `get_pricing_for_model()` as canonical name
+- **Parameter Stability**: Clear documentation of stable vs provider-specific parameters
+
+### Example Improvements
+- **Renamed**: `llm_adapter_import_example.py` → `llm_adapter_basic_usage.py` for clarity
+- **Enhanced**: `examples/README.md` with learning paths, use case categorization, and complexity levels
+- **Updated**: All examples to use correct registry model keys
+- **Test Naming**: Improved test function names for clarity (`test_llm_adapter_import` → `test_llm_adapter_singleton_import`)
+
+### Model Key Consistency
+- **Fixed**: All documentation now uses registry keys (e.g., `"openai:embed_small"`) instead of native model names
+- **Validated**: All model keys across README, API reference, examples, and tests match registry
+- **Updated**: Fixed invalid keys in test files to use correct registry models
+
+### Developer Experience
+- **Quick Start**: Enhanced README with immediate API overview
+- **Navigation**: Clear links between documentation files
+- **Learning Paths**: Structured progression from basic to advanced usage
+- **Troubleshooting**: Improved error handling and debugging guidance
+
+### Breaking Changes
+- **File Structure**: Removed redundant documentation files (content moved to consolidated locations)
+- **Example Names**: `llm_adapter_import_example.py` renamed to `llm_adapter_basic_usage.py`
+- **Test Names**: Internal test function names updated for clarity
+
+### Migration Guide
+- **Documentation Users**: Update bookmarks to use new `API_REFERENCE.md` for complete API docs
+- **Example Users**: Update references from `llm_adapter_import_example.py` to `llm_adapter_basic_usage.py`
+- **No Code Changes**: All existing code continues to work unchanged
+
+### Documentation Updates
+- **README.md**: Added "Public API (overview)" section with quick reference
+- **API_REFERENCE.md**: Complete method signatures, response structures, and usage patterns
+- **examples/README.md**: Comprehensive guide with learning paths and categorization
+- **Model Registry**: All examples now use correct registry keys
+
+---
+
 ## Version 0.2.0 - Parameter Validation System
 
 ### Overview
