@@ -140,10 +140,10 @@ Use `normalized["text"]` for display-safe text; `resp.output_text` may include p
 
 ## Quick links (for developers)
 
-- **Complete API Reference:** [API_REFERENCE.md](API_REFERENCE.md)
-- **Model Registry docs:** https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md
-- **Ready to use Examples:** https://github.com/vrraj/llm-adapter/tree/main/examples
-- **Dev notes:** https://github.com/vrraj/llm-adapter/blob/main/DEVELOPMENT.md
+- **Complete API Reference:** [API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md)
+- **Model Registry docs:** [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md)
+- **Ready to use Examples:** [examples](https://github.com/vrraj/llm-adapter/tree/main/examples)
+- **Dev notes:** [DEVELOPMENT.md](https://github.com/vrraj/llm-adapter/blob/main/DEVELOPMENT.md)
 
 ---
 
