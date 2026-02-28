@@ -77,7 +77,7 @@ The source includes developer tooling to test **custom model registries** (overr
 - `llm_adapter.create_embedding(...) -> EmbeddingResponse` — embeddings across providers
 - `llm_adapter.get_pricing_for_model(...) -> Pricing | None` — pricing metadata lookup from the registry
 
->📋 For **complete method signatures, parameter details, and full response structures**, see: [API_REFERENCE.md](API_REFERENCE.md)
+>📋 For **complete method signatures, parameter details, and full response structures**, see: <a href="https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md" target="_blank">API_REFERENCE.md</a>
 
 ### AdapterResponse (from `create`)
 
