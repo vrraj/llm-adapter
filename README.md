@@ -150,11 +150,8 @@ Use `normalized["text"]` for display-safe text; `resp.output_text` may include p
 
 ---
 
-<details>
-<summary><strong>Full GitHub README (expand)</strong></summary>
 
-
-## Examples & Getting Started
+## Usage Examples (PyPI)
 
 Install the adapter from PyPI, then download and run the standalone example scripts to explore common usage patterns such as chat, embeddings, streaming, and custom registry overrides.
 
@@ -537,4 +534,3 @@ make start
 
 This project is licensed under the MIT License.
 
-</details>
