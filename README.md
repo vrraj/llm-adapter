@@ -20,7 +20,7 @@ pip install vrraj-llm-adapter
 ## Quickstart
 Requires `OPENAI_API_KEY` or `GEMINI_API_KEY` set in your environment. Use a registry model key for `model=` (examples: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`).
 
-See the full list in MODEL_REGISTRY.md [here](https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md) or **print keys** programmatically (snippet below).
+See the full list in MODEL_REGISTRY.md [here](https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md){:target="_blank"} or **print keys** programmatically (snippet below).
 
 ```python
 from llm_adapter import llm_adapter
@@ -65,7 +65,7 @@ for key in adapter.model_registry.keys():
 
 The repo includes a small FastAPI demo + UI to try models, inspect registry metadata, and view normalized responses.
 
-The source includes developer tooling to test **custom model registries** (overrides/extensions) end-to-end in the UI—see **[Development And Demo UI](#development-and-demo-ui)** in the section below.
+The source includes developer tooling to test **custom model registries** (overrides/extensions) end-to-end in the UI. See **[Development And Demo UI](#development-and-demo-ui)** section below.
 
 ![LLM Adapter Interactive Playground](https://github.com/vrraj/llm-adapter/blob/main/images/llm_adapter_interactive_playground.png)
 
@@ -143,10 +143,10 @@ Use `normalized["text"]` for display-safe text; `resp.output_text` may include p
 
 ## Quick links (for developers)
 
-- **Complete API Reference:** [API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md)
-- **Model Registry docs:** [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md)
-- **Ready to use Examples:** [examples](https://github.com/vrraj/llm-adapter/tree/main/examples)
-- **Dev notes:** [DEVELOPMENT.md](https://github.com/vrraj/llm-adapter/blob/main/DEVELOPMENT.md)
+- **Complete API Reference:** [API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md){:target="_blank"}
+- **Model Registry docs:** [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md){:target="_blank"}
+- **Ready to use Examples:** [examples](https://github.com/vrraj/llm-adapter/tree/main/examples){:target="_blank"}
+- **Dev notes:** [DEVELOPMENT.md](https://github.com/vrraj/llm-adapter/blob/main/DEVELOPMENT.md){:target="_blank"}
 
 ---
 
