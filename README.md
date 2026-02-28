@@ -20,7 +20,7 @@ pip install vrraj-llm-adapter
 ## Quickstart
 Requires `OPENAI_API_KEY` or `GEMINI_API_KEY` set in your environment. Use a registry model key for `model=` (examples: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`).
 
-See the full list in MODEL_REGISTRY.md [here](https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md){:target="_blank"} or **print keys** programmatically (snippet below).
+See the full list in MODEL_REGISTRY.md <a href="https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md" target="_blank">here</a> or **print keys** programmatically (snippet below).
 
 ```python
 from llm_adapter import llm_adapter
@@ -69,7 +69,6 @@ The source includes developer tooling to test **custom model registries** (overr
 
 ![LLM Adapter Interactive Playground](https://github.com/vrraj/llm-adapter/blob/main/images/llm_adapter_interactive_playground.png)
 
->➡️ Run it from GitHub: see **Development & Demo UI** in the section below.
 
 ## Public API (overview)
 
@@ -143,10 +142,10 @@ Use `normalized["text"]` for display-safe text; `resp.output_text` may include p
 
 ## Quick links (for developers)
 
-- **Complete API Reference:** [API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md){:target="_blank"}
-- **Model Registry docs:** [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md){:target="_blank"}
-- **Ready to use Examples:** [examples](https://github.com/vrraj/llm-adapter/tree/main/examples){:target="_blank"}
-- **Dev notes:** [DEVELOPMENT.md](https://github.com/vrraj/llm-adapter/blob/main/DEVELOPMENT.md){:target="_blank"}
+- **Complete API Reference:** <a href="https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md" target="_blank">API_REFERENCE.md</a>
+- **Model Registry docs:** <a href="https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md" target="_blank">MODEL_REGISTRY.md</a>
+- **Ready to use Examples:** <a href="https://github.com/vrraj/llm-adapter/tree/main/examples" target="_blank">examples</a>
+- **Dev notes:** <a href="https://github.com/vrraj/llm-adapter/blob/main/DEVELOPMENT.md" target="_blank">DEVELOPMENT.md</a>
 
 ---
 
