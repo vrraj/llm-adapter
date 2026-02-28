@@ -1,7 +1,7 @@
 # vrraj-llm-adapter
 
 > **Development and Demo UI:**  
-> This repository ships with a FastAPI-powered **Interactive Playground** for validating text generation, embeddings, and registry configuration end-to-end. See **Development & Demo UI** below for details and setup instructions.
+> This repository ships with a FastAPI-powered **Interactive Playground** for validating text generation, embeddings, and registry configuration end-to-end. See **[Development & Demo UI](#development--demo-ui-full-validation-playground)** below for details and setup instructions.
 
 ![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
@@ -59,20 +59,6 @@ for key in adapter.model_registry.keys():
 - **Normalized responses** (text, tool calls, reasoning, usage)
 - **Access control** via allowlist env var (`LLM_ADAPTER_ALLOWED_MODELS`)
 - **Pricing metadata** in registry for cost visibility
-
-
-## Development & Demo UI (Full Validation Playground)
-
-The repository includes a FastAPI-based **Interactive Playground** that allows you to:
-
-- Validate text generation and embeddings end-to-end
-- Inspect registry metadata and parameter policies
-- Test **custom model registries and overrides** safely
-- Compare raw provider output vs normalized `LLMResult`
-
-This UI is intended as both a validation tool for your configurations and a reference implementation of how to integrate the adapter in a real application.
-
-➡️ See **Interactive Playground** above and **Development And Demo UI** in the expanded section below for setup instructions.
 
 
 ## Interactive Playground (GitHub)
