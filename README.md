@@ -489,20 +489,6 @@ make logs
 
 For streaming examples, see `examples/streaming_call_example.py`.
 
-## Examples
-
-The `examples/` folder contains practical scripts demonstrating llm-adapter usage.
-
-### Quick Start Examples
-
-```bash
-python examples/openai_adapter_example.py "Say hello from llm-adapter"
-python examples/openai_embedding_example.py "Embed this text via llm-adapter"
-
-export OPENAI_API_KEY="..."
-python examples/streaming_call_example.py --model-key openai:gpt-4o-mini --prompt "seattle attractions"
-```
-
 ## Supported Providers
 
 Supports:
@@ -513,12 +499,16 @@ Models and capabilities are defined in `src/llm_adapter/model_registry.py`.
 
 ## Adding New Models
 
-To add support for a new model:
+To add support for new models or override existing configurations, use **custom registries** rather than modifying the core registry:
 
-1. Open `src/llm_adapter/model_registry.py`
-2. Add a new entry to the `MODEL_INFO` dictionary
-3. Define its endpoint (e.g., `chat_completions` or `gemini_sdk`) and its capabilities
-4. Test it via the Demo UI
+1. **Create a custom registry** - See `examples/custom_registry.py` for a complete example
+2. **Define ModelInfo entries** - Configure endpoints, capabilities, pricing, and parameter policies
+3. **Load your registry** - Pass it to `LLMAdapter(model_registry=your_registry)` or merge with defaults
+4. **Test via Demo UI** - The Interactive Playground supports custom registry testing
+
+📖 **For complete custom registry documentation**, see:
+- <a href="https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md#custom-registry">MODEL_REGISTRY.md - Custom Registry</a>
+- <a href="https://github.com/vrraj/llm-adapter/blob/main/examples/custom_registry.py">examples/custom_registry.py</a> - Working example
 
 ## Development
 
