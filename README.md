@@ -20,7 +20,7 @@ pip install vrraj-llm-adapter
 ## Quickstart
 Requires `OPENAI_API_KEY` or `GEMINI_API_KEY` set in your environment. Use a registry model key for `model=` (examples: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`).
 
-See the full list in MODEL_REGISTRY.md <a href="https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md" target="_blank">here</a> or **print keys** programmatically (snippet below).
+See the full list in MODEL_REGISTRY.md <a href="https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md">here</a> or **print keys** programmatically (snippet below).
 
 ```python
 from llm_adapter import llm_adapter
@@ -77,7 +77,7 @@ The source includes developer tooling to test **custom model registries** (overr
 - `llm_adapter.create_embedding(...) -> EmbeddingResponse` — embeddings across providers
 - `llm_adapter.get_pricing_for_model(...) -> Pricing | None` — pricing metadata lookup from the registry
 
->📋 For **complete method signatures, parameter details, and full response structures**, see: <a href="https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md" target="_blank">API_REFERENCE.md</a>
+>📋 For **complete method signatures, parameter details, and full response structures**, see: <a href="https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md">API_REFERENCE.md</a>
 
 ### AdapterResponse (from `create`)
 
@@ -142,10 +142,10 @@ Use `normalized["text"]` for display-safe text; `resp.output_text` may include p
 
 ## Quick links (for developers)
 
-- **Complete API Reference:** <a href="https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md" target="_blank" rel="noopener noreferrer">API_REFERENCE.md</a>
-- **Model Registry docs:** <a href="https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md" target="_blank" rel="noopener noreferrer">MODEL_REGISTRY.md</a>
-- **Ready to use Examples:** <a href="https://github.com/vrraj/llm-adapter/tree/main/examples" target="_blank" rel="noopener noreferrer">examples</a>
-- **Dev notes:** <a href="https://github.com/vrraj/llm-adapter/blob/main/DEVELOPMENT.md" target="_blank" rel="noopener noreferrer">DEVELOPMENT.md</a>
+- **Complete API Reference:** <a href="https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md">API_REFERENCE.md</a>
+- **Model Registry docs:** <a href="https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md">MODEL_REGISTRY.md</a>
+- **Ready to use Examples:** <a href="https://github.com/vrraj/llm-adapter/tree/main/examples">examples</a>
+- **Dev notes:** <a href="https://github.com/vrraj/llm-adapter/blob/main/DEVELOPMENT.md">DEVELOPMENT.md</a>
 
 ---
 
