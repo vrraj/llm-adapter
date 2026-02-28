@@ -1,5 +1,8 @@
 # vrraj-llm-adapter
 
+> **Development and Demo UI:**  
+> This repository ships with a FastAPI-powered **Interactive Playground** for validating text generation, embeddings, and registry configuration end-to-end. See **Development & Demo UI** below for details and setup instructions.
+
 ![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
 Provider-agnostic LLM adapter for **text generation + embeddings** with a **registry-driven routing layer** (capabilities, param policies, pricing metadata, access control), plus **normalized outputs** (text, tool calls, reasoning, usage).
@@ -58,15 +61,29 @@ for key in adapter.model_registry.keys():
 - **Pricing metadata** in registry for cost visibility
 
 
+## Development & Demo UI (Full Validation Playground)
+
+The repository includes a FastAPI-based **Interactive Playground** that allows you to:
+
+- Validate text generation and embeddings end-to-end
+- Inspect registry metadata and parameter policies
+- Test **custom model registries and overrides** safely
+- Compare raw provider output vs normalized `LLMResult`
+
+This UI is intended as both a validation tool for your configurations and a reference implementation of how to integrate the adapter in a real application.
+
+➡️ See **Interactive Playground** above and **Development And Demo UI** in the expanded section below for setup instructions.
+
+
 ## Interactive Playground (GitHub)
 
 The repo includes a small FastAPI demo + UI to try models, inspect registry metadata, and view normalized responses.
 
-It also includes developer tooling to test **custom model registries** (overrides/extensions) end-to-end in the UI—see **Development And Demo UI** in the expanded section below.
+The source includes developer tooling to test **custom model registries** (overrides/extensions) end-to-end in the UI—see **[Development And Demo UI](#development-and-demo-ui)** in the section below.
 
 ![LLM Adapter Interactive Playground](https://github.com/vrraj/llm-adapter/blob/main/images/llm_adapter_interactive_playground.png)
 
->➡️ Run it from GitHub: see **Development & Demo UI** in the expanded section below.
+>➡️ Run it from GitHub: see **Development & Demo UI** in the section below.
 
 ## Public API (overview)
 
@@ -217,47 +234,6 @@ python llm_adapter_basic_usage.py
 
 For application-facing output, use the create → normalize flow (see **Text Generation - Application Wrapper Pattern** above).
 If you need the raw provider boundary object for debugging, `llm_adapter.create(...)` returns an `AdapterResponse`.
-
-#### Available Models
-
-**Discover all available models:**
-```python
-from llm_adapter import LLMAdapter
-
-adapter = LLMAdapter()
-print("Available models:")
-for key in adapter.model_registry.keys():
-    print(f"  - {key}")
-```
-
-**Key model categories:**
-- **OpenAI**: `openai:gpt-4o-mini`, `openai:reasoning_o3-mini`, `openai:embed_small`
-- **Gemini**: `gemini:openai-3-flash-preview`, `gemini:native-embed`, `gemini:openai-reasoning-2.5-flash`
-
-📖 **For complete model registry documentation**, see https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md#discovering-available-models
-
-### Response normalization
-
-For consistent response format across providers:
-
-```python
-from llm_adapter import llm_adapter, LLMError
-
-try:
-    response = llm_adapter.create(
-        model="openai:gpt-4o-mini",
-        input="Write a one-sentence bedtime story about a unicorn."
-    )
-
-    # Normalize to standard format
-    normalized_response = llm_adapter.normalize_adapter_response(response)
-    print(normalized_response['text'])
-    print(normalized_response['usage'])
-    print(normalized_response['finish_reason'])
-
-except LLMError as e:
-    print(f"Error: {e.code} - {e}")
-```
 
 ### Accessing Reasoning Content
 
