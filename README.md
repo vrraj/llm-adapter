@@ -142,10 +142,10 @@ Use `normalized["text"]` for display-safe text; `resp.output_text` may include p
 
 ## Quick links (for developers)
 
-- **Complete API Reference:** <a href="https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md" target="_blank">API_REFERENCE.md</a>
-- **Model Registry docs:** <a href="https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md" target="_blank">MODEL_REGISTRY.md</a>
-- **Ready to use Examples:** <a href="https://github.com/vrraj/llm-adapter/tree/main/examples" target="_blank">examples</a>
-- **Dev notes:** <a href="https://github.com/vrraj/llm-adapter/blob/main/DEVELOPMENT.md" target="_blank">DEVELOPMENT.md</a>
+- **Complete API Reference:** <a href="https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md" target="_blank" rel="noopener noreferrer">API_REFERENCE.md</a>
+- **Model Registry docs:** <a href="https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md" target="_blank" rel="noopener noreferrer">MODEL_REGISTRY.md</a>
+- **Ready to use Examples:** <a href="https://github.com/vrraj/llm-adapter/tree/main/examples" target="_blank" rel="noopener noreferrer">examples</a>
+- **Dev notes:** <a href="https://github.com/vrraj/llm-adapter/blob/main/DEVELOPMENT.md" target="_blank" rel="noopener noreferrer">DEVELOPMENT.md</a>
 
 ---
 
