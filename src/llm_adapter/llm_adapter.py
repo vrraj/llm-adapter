@@ -100,8 +100,6 @@ class EmbeddingResponse:
         self,
         data: List[List[float]],
         usage: Any,
-        provider: str,
-        model: str,
         normalized: Optional[bool] = None,
         vector_dim: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
@@ -109,11 +107,9 @@ class EmbeddingResponse:
     ):
         self.data = data  # Always direct list of embedding vectors
         self.usage = usage  # Standardized usage object
-        self.provider = provider  # Provider identifier
-        self.model = model  # Model used
         self.normalized = normalized  # Was normalization applied
         self.vector_dim = vector_dim  # Convenience field
-        self.metadata = metadata or {}  # Rich metadata
+        self.metadata = metadata or {}  # Rich metadata (includes provider, model, etc.)
         self.raw = raw  # Original response for debugging
 
 
@@ -206,10 +202,6 @@ class LLMAdapter:
         id: Optional[str]
 
     class LLMResult(TypedDict, total=False):
-        provider: str
-        model: str
-        id: Optional[str]
-        created_at: Optional[float]
         text: str
         reasoning: Optional[str]
         role: str
@@ -478,10 +470,6 @@ class LLMAdapter:
                 raw_out = ar
 
             return {
-                "provider": provider_norm,
-                "model": model,
-                "id": rid,
-                "created_at": created_at,
                 "text": answer_text or "",
                 "reasoning": reasoning_text,
                 "role": "assistant",
@@ -2250,11 +2238,12 @@ class LLMAdapter:
                 prompt_tokens=pt,
                 total_tokens=tt,
             ),
-            provider="openai",
-            model=resolved_model,
             normalized=self._was_normalization_applied("openai", **kwargs),
             vector_dim=len(vectors[0]) if vectors else None,
-            metadata=metadata,
+            metadata={
+                "provider": "openai",
+                "model": resolved_model,
+            },
             raw=raw_response
         )
 
@@ -2663,11 +2652,13 @@ class LLMAdapter:
                 ),
                 total_tokens=getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0
             ),
-            provider="gemini",
-            model=resolved_model,
             normalized=normalize_embedding,
             vector_dim=len(vectors[0]) if vectors else None,
-            metadata=metadata,
+            metadata={
+                "provider": "gemini",
+                "model": resolved_model,
+                **metadata
+            },
             raw=raw_response
         )
 
@@ -2830,11 +2821,13 @@ class LLMAdapter:
         return EmbeddingResponse(
             data=vectors,  # Direct list of embedding vectors
             usage=usage,
-            provider="gemini_native",
-            model=resolved_model,
             normalized=normalize_embedding,
             vector_dim=len(vectors[0]) if vectors else None,
-            metadata=metadata,
+            metadata={
+                "provider": "gemini_native",
+                "model": resolved_model,
+                **metadata
+            },
             raw=raw_response
         )
 

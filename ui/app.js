@@ -344,11 +344,13 @@ async function init() {
         }
       }
 
-      if (providerResp !== undefined) {
-        rawApiOutput.textContent = JSON.stringify(providerResp, null, 2);
-      }
-      if (normalizedResp !== undefined) {
-        normalizedOutput.textContent = JSON.stringify(normalizedResp, null, 2);
+      if (!embedMode) {
+        if (providerResp !== undefined) {
+          rawApiOutput.textContent = JSON.stringify(providerResp, null, 2);
+        }
+        if (normalizedResp !== undefined) {
+          normalizedOutput.textContent = JSON.stringify(normalizedResp, null, 2);
+        }
       }
 
       if (body.ok) {

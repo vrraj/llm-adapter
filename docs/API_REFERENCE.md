@@ -301,8 +301,6 @@ class EmbeddingResponse:
         self,
         data: List[List[float]],
         usage: Any,
-        provider: str,
-        model: str,
         normalized: Optional[bool] = None,
         vector_dim: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
@@ -316,12 +314,10 @@ class EmbeddingResponse:
 |-------|------|-------------|
 | `data` | `List[List[float]]` | Direct list of embedding vectors |
 | `usage` | `EmbeddingUsage` | Token usage information |
-| `provider` | `str` | Provider identifier |
-| `model` | `str` | Model identifier used |
 | `normalized` | `bool` | Whether vectors were normalized |
 | `vector_dim` | `int` | Dimension of each vector |
-| `metadata` | `Dict[str, Any]` | Additional metadata |
-| `raw` | `Any` | Original provider response |
+| `metadata` | `Dict[str, Any]` | Additional metadata (includes provider, model, etc.) |
+| `raw` | `Any` | Original response for debugging |
 
 ### `EmbeddingUsage`
 
@@ -342,10 +338,6 @@ Standardized response format from `normalize_adapter_response()`.
 
 ```python
 class LLMResult(TypedDict, total=False):
-    provider: str
-    model: str
-    id: Optional[str]
-    created_at: Optional[float]
     text: str
     reasoning: Optional[str]
     role: str

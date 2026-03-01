@@ -44,7 +44,7 @@ def main() -> None:
             input="Write a one-sentence summary of artificial intelligence."
         )
 
-        print(f"Model: {result['model']}")
+        print(f"Model: {result['metadata'].get('model', 'Unknown')}")
         print(f"Text: {result['text']}")
         if result.get("reasoning"):
             print("Reasoning: (present)")

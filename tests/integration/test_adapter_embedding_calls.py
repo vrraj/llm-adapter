@@ -36,8 +36,8 @@ def test_embedding_single_input():
         print(f"First vector length: {len(emb_resp.data[0]) if emb_resp.data else 0}")
         print(f"Embedding (Truncated): {str(emb_resp.data[0][:5]) if emb_resp.data else 'No data'}...")
         print(f"Usage: {getattr(emb_resp, 'usage', 'Usage info not available')}")
-        print(f"Provider: {getattr(emb_resp, 'provider', 'No provider')}")
-        print(f"Model: {getattr(emb_resp, 'model', 'No model')}")
+        print(f"Provider: {emb_resp.metadata.get('provider', 'No provider') if emb_resp.metadata else 'No provider'}")
+        print(f"Model: {emb_resp.metadata.get('model', 'No model') if emb_resp.metadata else 'No model'}")
         print(f"Vector dimensions: {getattr(emb_resp, 'vector_dim', 'No dim')}")
         print(f"Normalized: {getattr(emb_resp, 'normalized', 'No normalization info')}")
         return True
@@ -66,8 +66,8 @@ def test_embedding_multiple_inputs():
         print(f"Magnitudes: {emb_resp.metadata.get('magnitudes', 'No magnitudes')}")
         print(f"Processing time: {emb_resp.metadata.get('processing_time', 'No time')}")
         print(f"Usage: {getattr(emb_resp, 'usage', 'Usage info not available')}")
-        print(f"Provider: {getattr(emb_resp, 'provider', 'No provider')}")
-        print(f"Model: {getattr(emb_resp, 'model', 'No model')}")
+        print(f"Provider: {emb_resp.metadata.get('provider', 'No provider') if emb_resp.metadata else 'No provider'}")
+        print(f"Model: {emb_resp.metadata.get('model', 'No model') if emb_resp.metadata else 'No model'}")
         print(f"Vector dimensions: {getattr(emb_resp, 'vector_dim', 'No dim')}")
         print(f"Normalized: {getattr(emb_resp, 'normalized', 'No normalization info')}")
         return True
@@ -84,8 +84,8 @@ def test_openai_embedding():
         )
         print("✅ OpenAI embedding works")
         print(f"Data length: {len(emb_resp.data)}")
-        print(f"Provider: {getattr(emb_resp, 'provider', 'No provider')}")
-        print(f"Model: {getattr(emb_resp, 'model', 'No model')}")
+        print(f"Provider: {emb_resp.metadata.get('provider', 'No provider') if emb_resp.metadata else 'No provider'}")
+        print(f"Model: {emb_resp.metadata.get('model', 'No model') if emb_resp.metadata else 'No model'}")
         
         # Test consistent access pattern
         for i, vector in enumerate(emb_resp.data):
@@ -108,8 +108,8 @@ def test_gemini_custom_parameters():
         )
         print("✅ Gemini custom parameters embedding works")
         print(f"Data length: {len(emb_resp.data)}")
-        print(f"Provider: {getattr(emb_resp, 'provider', 'No provider')}")
-        print(f"Model: {getattr(emb_resp, 'model', 'No model')}")
+        print(f"Provider: {emb_resp.metadata.get('provider', 'No provider') if emb_resp.metadata else 'No provider'}")
+        print(f"Model: {emb_resp.metadata.get('model', 'No model') if emb_resp.metadata else 'No model'}")
         print(f"Vector dimensions: {getattr(emb_resp, 'vector_dim', 'No dim')}")
         print(f"Normalized: {getattr(emb_resp, 'normalized', 'No normalization info')}")
         print(f"Magnitudes: {emb_resp.metadata.get('magnitudes', 'No magnitudes')}")

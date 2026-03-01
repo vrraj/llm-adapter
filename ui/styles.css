@@ -228,3 +228,9 @@ h4 {
   max-height: 35em; /* Allow scrolling when content exceeds */
   overflow-y: auto;
 }
+
+#embedding_output {
+  min-height: 40em; /* 40 lines */
+  max-height: 40em; /* Allow scrolling when content exceeds */
+  overflow-y: auto;
+}

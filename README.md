@@ -25,7 +25,7 @@ pip install vrraj-llm-adapter
 ## What you get
 
 - **One interface** for generation + embeddings across providers
-- **Extensible registry-driven routing** (provider, endpoint, capabilities, limits)
+- **Registry-driven routing (default + extensible)** — ships with built-in model keys and supports **custom** registry extensions
 - **Parameter policies** (allowed/disabled filtering per model)
 - **Normalized responses** (text, tool calls, reasoning, usage)
 - **Model Allowlist** (access control)
@@ -36,12 +36,11 @@ pip install vrraj-llm-adapter
 
 ## Quickstart
 
-> Ensure **API keys** are set: `OPENAI_API_KEY` and/or `GEMINI_API_KEY`
-
-- The examples below use a registry model key for `model=` (for example: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`). See the full list in [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md) or print keys programmatically (snippet below)
+The examples below use a registry model key for `model=` (for example: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`). For a complete list of default model keys, see [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md) or print keys programmatically (snippet below)
 
 ### Option A: Run a ready-to-use example script
-Runs sample generation and embeddings for openai and gemini
+Download and run a ready-to-use example script for text generation and embeddings for openai and gemini
+
 > Requires OPENAI_API_KEY or GEMINI_API_KEY already set.
 
 ```bash
@@ -50,7 +49,6 @@ curl -L -O https://raw.githubusercontent.com/vrraj/llm-adapter/main/examples/llm
 python llm_adapter_basic_usage.py
 ```
 
-This downloads and runs a working example demonstrating text generation and normalization.
 
 ### Option B: Call the API directly
 
@@ -100,8 +98,8 @@ The source includes developer tooling to test **custom model registries** (overr
 
 - `llm_adapter.create(...) -> AdapterResponse` — text generation (supports tools + optional streaming)
 - `llm_adapter.normalize_adapter_response(...) -> LLMResult` — normalize `AdapterResponse` into a consistent dict schema
-- `llm_adapter.create_embedding(...) -> EmbeddingResponse` — embeddings across providers
-- `llm_adapter.get_pricing_for_model(...) -> Pricing | None` — pricing metadata lookup from the registry
+- `llm_adapter.create_embedding(...) -> EmbeddingResponse` — create embeddings
+- `llm_adapter.get_pricing_for_model(...) -> Pricing | None` — pricing metadata lookup
 
 >📋 For **complete method signatures, parameter details, and full response structures**, see: [API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md)
 
@@ -123,20 +121,35 @@ AdapterResponse(
 )
 ```
 
+### EmbeddingResponse (from `create_embedding`)
+
+Top-level fields:
+
+```python
+EmbeddingResponse(
+  data: List[List[float]],
+  usage: EmbeddingUsage,
+  normalized: bool | None,
+  vector_dim: int | None,
+  metadata: dict | None,
+  raw: Any | None,
+)
+```
+
 ### LLMResult (from `normalize_adapter_response`)
 
 Top-level fields:
 
 ```python
 {
-  "provider": str,
-  "model": str,
   "text": str,
   "reasoning": str | None,
-  "usage": dict,
-  "tool_calls": list,
+  "role": str,
   "status": str,
   "finish_reason": str | None,
+  "usage": dict,
+  "tool_calls": list,
+  "metadata": dict | None,
   "raw": Any,
 }
 ```
@@ -166,7 +179,7 @@ Use `result["text"]` from `normalize_adapter_response()` for display-safe text; 
 
 
 
-## Quick links (for developers)
+## Documentation & References
 
 - **Complete API Reference:** [API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md)
 - **Model Registry docs:** [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md)
@@ -330,7 +343,8 @@ except LLMError as e:
 
 ## Development And Demo UI
 
-Do this to run the **demo UI** (runs on port 8100) or **customize** the code.
+Running the **demo UI** (runs on port 8100) and/or **customize** the code.
+The package includes a **Makefile** with quick start, stop and other helpful commands.
 
 1. Clone the repository and run the setup script.
 
@@ -340,7 +354,7 @@ cd llm-adapter
 bash scripts/llm_adapter_setup.sh
 ```
 
->This script (scripts/llm_adapter_setup.sh) checks prerequisites (`python3`, `make`), creates `.env` if missing, sets up a local `.venv`, installs the package (`pip install -e .`), and shows **next steps**. The demo UI and FastAPI server run in this `.venv` virtual environment. Safe to run multiple times.
+>This quick setup script (scripts/llm_adapter_setup.sh) checks prerequisites (`python3`, `make`), creates `.env` if missing, sets up a local `.venv`, installs the package (`pip install -e .`), and shows **next steps**. The demo UI and FastAPI server run in this `.venv` virtual environment. Safe to run multiple times.
 
 2. Set required API keys (see **Environment variables** section below).
 
@@ -356,7 +370,15 @@ make start
 
 - http://localhost:8100/ui/
 
-(See **Run the demo FastAPI server + UI** section below for full details.)
+
+### Manual start (optional)
+
+If you prefer not to use the Makefile helpers, you can start the FastAPI server directly:
+
+```bash
+uvicorn llm_adapter_demo.api:app --reload --port 8100
+```
+
 
 ### For Developers: Running Tests
 
@@ -376,9 +398,7 @@ pytest -m "integration or unit"
 
 ## Project structure
 
-For internal design and architecture notes, see https://github.com/vrraj/llm-adapter/blob/main/docs/DEVELOPMENT.md.
-
-📖 **For parameter validation and filtering details**, see https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md#parameter-validation-system.
+For internal design and architecture notes, see [DEVELOPMENT.md](https://github.com/vrraj/llm-adapter/blob/main/docs/DEVELOPMENT.md).
 
 ## ModelSpec: Structured Configuration
 
@@ -417,9 +437,6 @@ resp = llm_adapter.create_embedding(spec=embed_spec, input="Text to embed")
 | **Individual params** | Optional (auto-detected from registry) | Registry key (`openai:gpt-4o-mini`) | ✅ Yes | ❌ Runtime |
 | **ModelSpec** | Required (explicit) | Provider-native (`gpt-4o-mini`) | ❌ No | ✅ Static type-checkers |
 
-## Response Structure
-
-For complete response contracts (AdapterResponse, LLMResult, EmbeddingResponse), see https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md.
 
 ## Unified Token Accounting
 
@@ -471,29 +488,6 @@ The `LLM_ADAPTER_ALLOWED_MODELS` environment variable allows you to restrict whi
 export LLM_ADAPTER_ALLOWED_MODELS="openai:gpt-4o-mini,gemini:native-sdk-reasoning-2.5-flash"
 ```
 
-## Run the demo FastAPI server + UI
-
-### Option A: direct uvicorn
-
-```bash
-uvicorn llm_adapter_demo.api:app --reload --port 8100
-```
-
-* API root: http://127.0.0.1:8100/
-* **LLM Adapter Interactive Playground**: http://127.0.0.1:8100/ui/
-
-### Option B: Makefile helpers
-
-```bash
-make install
-make start
-make start-bg
-make stop
-make kill
-make logs
-```
-
-For streaming examples, see `examples/streaming_call_example.py`.
 
 ## Supported Providers
 
