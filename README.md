@@ -1,14 +1,17 @@
 # vrraj-llm-adapter
 
 > **Development and Demo UI:**  
-> This repository ships with a FastAPI-powered **Interactive Playground** for validating text generation, embeddings, and registry configuration end-to-end. See **[Development & Demo UI](#development--demo-ui-full-validation-playground)** below for details and setup instructions.
+> This repository ships with a FastAPI-powered **Interactive Playground** for validating text generation, embeddings, and registry configuration end-to-end. See **[Development And Demo UI](#development-and-demo-ui)** below for details and setup instructions.
 
 ![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
 Provider-agnostic LLM adapter for **text generation + embeddings** with a **registry-driven routing layer** (capabilities, param policies, pricing metadata, access control), plus **normalized outputs** (text, tool calls, reasoning, usage).
 
+Currently supports OpenAI and Gemini (extensible architecture for additional providers).
+
 - **PyPI:** https://pypi.org/project/vrraj-llm-adapter
 - **GitHub:** https://github.com/vrraj/llm-adapter
+
 
 ## Install
 
@@ -17,16 +20,47 @@ pip install vrraj-llm-adapter
 ```
 
 
-## Quickstart
-Requires `OPENAI_API_KEY` or `GEMINI_API_KEY` set in your environment. Use a registry model key for `model=` (examples: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`).
 
-See the full list in MODEL_REGISTRY.md <a href="https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md">here</a> or **print keys** programmatically (snippet below).
+
+## What you get
+
+- **One interface** for generation + embeddings across providers
+- **Extensible registry-driven routing** (provider, endpoint, capabilities, limits)
+- **Parameter policies** (allowed/disabled filtering per model)
+- **Normalized responses** (text, tool calls, reasoning, usage)
+- **Model Allowlist** (access control)
+- **Pricing metadata** in registry for cost visibility
+
+
+
+
+## Quickstart
+
+> Ensure **API keys** are set: `OPENAI_API_KEY` and/or `GEMINI_API_KEY`
+
+- The examples below use a registry model key for `model=` (for example: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`). See the full list in [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md) or print keys programmatically (snippet below)
+
+### Option A: Run a ready-to-use example script
+Runs sample generation and embeddings for openai and gemini
+> Requires OPENAI_API_KEY or GEMINI_API_KEY already set.
+
+```bash
+curl -L -O https://raw.githubusercontent.com/vrraj/llm-adapter/main/examples/llm_adapter_basic_usage.py
+
+python llm_adapter_basic_usage.py
+```
+
+This downloads and runs a working example demonstrating text generation and normalization.
+
+### Option B: Call the API directly
+
+> Requires OPENAI_API_KEY or GEMINI_API_KEY already set.
 
 ```python
 from llm_adapter import llm_adapter
 
 resp = llm_adapter.create(
-    model="openai:gpt-4o-mini",
+    model="openai:gpt-4o-mini", # for gemini, use "gemini:openai-3-flash-preview"
     input="Write a one-sentence bedtime story about a unicorn.",
     max_output_tokens=100,
 )
@@ -46,19 +80,11 @@ The package ships with a default registry. To list available keys:
 from llm_adapter import LLMAdapter
 
 adapter = LLMAdapter()
-for key in adapter.model_registry.keys():
+for key in sorted(adapter.model_registry.keys()):
     print(key)
 ```
 
 
-## What you get
-
-- **One interface** for generation + embeddings across providers
-- **Extensible registry-driven routing** (provider, endpoint, capabilities, limits)
-- **Parameter policies** (allowed/disabled filtering per model)
-- **Normalized responses** (text, tool calls, reasoning, usage)
-- **Access control** via allowlist env var (`LLM_ADAPTER_ALLOWED_MODELS`)
-- **Pricing metadata** in registry for cost visibility
 
 
 ## Interactive Playground (GitHub)
@@ -77,7 +103,7 @@ The source includes developer tooling to test **custom model registries** (overr
 - `llm_adapter.create_embedding(...) -> EmbeddingResponse` — embeddings across providers
 - `llm_adapter.get_pricing_for_model(...) -> Pricing | None` — pricing metadata lookup from the registry
 
->📋 For **complete method signatures, parameter details, and full response structures**, see: <a href="https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md">API_REFERENCE.md</a>
+>📋 For **complete method signatures, parameter details, and full response structures**, see: [API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md)
 
 ### AdapterResponse (from `create`)
 
@@ -136,16 +162,16 @@ Notes:
 ```
 
 Normalize to `LLMResult` for stable, application-facing output.
-Use `normalized["text"]` for display-safe text; `resp.output_text` may include provider thought markup depending on model configuration.
+Use `result["text"]` from `normalize_adapter_response()` for display-safe text; `resp.output_text` may include provider thought markup depending on model configuration.
 
 
 
 ## Quick links (for developers)
 
-- **Complete API Reference:** <a href="https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md">API_REFERENCE.md</a>
-- **Model Registry docs:** <a href="https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md">MODEL_REGISTRY.md</a>
-- **Ready to use Examples:** <a href="https://github.com/vrraj/llm-adapter/tree/main/examples">examples</a>
-- **Dev notes:** <a href="https://github.com/vrraj/llm-adapter/blob/main/docs/DEVELOPMENT.md">DEVELOPMENT.md</a>
+- **Complete API Reference:** [API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md)
+- **Model Registry docs:** [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md)
+- **Ready to use Examples:** [examples](https://github.com/vrraj/llm-adapter/tree/main/examples)
+- **Dev notes:** [DEVELOPMENT.md](https://github.com/vrraj/llm-adapter/blob/main/docs/DEVELOPMENT.md)
 
 ---
 
@@ -176,26 +202,6 @@ print(result["text"])
 
 This pattern keeps the library surface minimal while allowing your application to standardize on the normalized contract.
 
-### 📥 Run Standalone Examples
-
-Install the package in a virtual environment:
-
-```bash
-pip install vrraj-llm-adapter
-```
-
-### Download and execute an example script
-
-```bash
-curl -O https://raw.githubusercontent.com/vrraj/llm-adapter/main/examples/llm_adapter_basic_usage.py
-
-# Set your API keys
-export OPENAI_API_KEY="..."
-export GEMINI_API_KEY="..."
-
-# Run the example
-python llm_adapter_basic_usage.py
-```
 
 **Core Examples:**
 -  llm_adapter_basic_usage.py - Basic usage and normalization
@@ -288,7 +294,7 @@ custom_registry = {
 adapter = LLMAdapter(model_registry=custom_registry)
 ```
 
-### Models Allowlist (Access control)
+### Model Allowlist
 
 ```bash
 export LLM_ADAPTER_ALLOWED_MODELS="openai:gpt-4o-mini,openai:embed_small"
@@ -455,9 +461,9 @@ Supported env vars:
 - `OPENAI_API_KEY`
 - `GEMINI_API_KEY`
 - `GEMINI_OPENAI_BASE_URL`
-- `LLM_ADAPTER_ALLOWED_MODELS` (comma-separated list) - Restrict which models can be used.
+- `LLM_ADAPTER_ALLOWED_MODELS` (comma-separated list) - Restrict which models can be used in each environment.
 
-## Model Allowlist (Access Control)
+## Model Allowlist
 
 The `LLM_ADAPTER_ALLOWED_MODELS` environment variable allows you to restrict which models can be used. *By default, all models are allowed*.
 
@@ -507,8 +513,8 @@ To add support for new models or override existing configurations, use **custom 
 4. **Test via Demo UI** - The Interactive Playground supports custom registry testing
 
 📖 **For complete custom registry documentation**, see:
-- <a href="https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md#custom-registry">MODEL_REGISTRY.md - Custom Registry</a>
-- <a href="https://github.com/vrraj/llm-adapter/blob/main/examples/custom_registry.py">examples/custom_registry.py</a> - Working example
+- [MODEL_REGISTRY.md - Custom Registry](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md#custom-registry)
+- [examples/custom_registry.py](https://github.com/vrraj/llm-adapter/blob/main/examples/custom_registry.py) - Working example
 
 ## Development
 
