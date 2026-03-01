@@ -229,10 +229,8 @@ This pattern keeps the library surface minimal while allowing your application t
    *(See "Model Allowlist (Access Control)" section for environment variable details)*
 -  custom_registry.py - Custom registry
 
-### Text Generation
-
-For application-facing output, use the create → normalize flow (see **Text Generation - Application Wrapper Pattern** above).
-If you need the raw provider boundary object for debugging, `llm_adapter.create(...)` returns an `AdapterResponse`.
+> For application-facing output, use the create → normalize flow (see **Text Generation - Application Wrapper Pattern** above).
+> If you need the raw provider boundary object for debugging, `llm_adapter.create(...)` returns an `AdapterResponse`.
 
 ### Accessing Reasoning Content
 
