@@ -8,7 +8,20 @@ from typing import Any, Dict, Optional, Iterator, TypedDict, List, Callable, Set
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    import os
+    from pathlib import Path
+    
+    # Try to find .env file relative to this module's location
+    # This works whether running from source or installed package
+    current_dir = Path(__file__).resolve().parent
+    project_root = current_dir.parent.parent  # src/llm_adapter -> llm-adapter root
+    env_path = project_root / ".env"
+    
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+    else:
+        # Fallback to default behavior (look in current working directory)
+        load_dotenv()
 except ImportError:
     # dotenv not available, rely on environment variables
     pass

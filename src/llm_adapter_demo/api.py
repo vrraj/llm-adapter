@@ -49,6 +49,7 @@ def _get_adapter(merge_custom_registry: bool = False) -> LLMAdapter:
         USER_REGISTRY = getattr(registry_module, 'REGISTRY')
         
         # Create new adapter with merged registry
+        # Environment variables are loaded in config.py, so new adapter will have same context
         custom_adapter = LLMAdapter(model_registry=USER_REGISTRY)
         
         # Copy API keys from default adapter

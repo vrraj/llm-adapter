@@ -37,6 +37,13 @@ pip install vrraj-llm-adapter
 ## Quickstart
 
 > **Requires API keys:** `OPENAI_API_KEY` and/or `GEMINI_API_KEY`
+> 
+> **Setup:** Copy `.env.example` to `.env` and configure your API keys
+
+```bash
+cp .env.example .env
+# Edit .env with your API keys
+```
 
 The examples below use a registry model key for `model=` (for example: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`). For a complete list of default model keys, see [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md) or print keys programmatically (snippet below)
 
