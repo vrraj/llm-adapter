@@ -76,7 +76,7 @@ echo "   Edit .env file and add one or both of:"
 echo "   - OPENAI_API_KEY=sk-..."
 echo "   - GEMINI_API_KEY=..."
 echo ""
-echo "  2) START the FastAPI demo (foreground): 
+echo "  2) START the FastAPI demo (foreground):" 
 echo "     - make start"
 echo "     - or background service: make start-bg"
 echo ""

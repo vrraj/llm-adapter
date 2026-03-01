@@ -52,6 +52,21 @@ def get_model_options(adapter=None) -> Dict[str, Any]:
 
 
 def is_provider_enabled(provider: str) -> bool:
+    # Ensure environment variables are loaded (defensive programming)
+    try:
+        from dotenv import load_dotenv
+        from pathlib import Path
+        
+        # Reload dotenv to ensure latest environment variables
+        current_dir = Path(__file__).resolve().parent
+        project_root = current_dir.parent.parent
+        env_path = project_root / ".env"
+        
+        if env_path.exists():
+            load_dotenv(dotenv_path=env_path, override=True)
+    except Exception:
+        pass  # Ignore errors, just use existing environment
+    
     provider = provider.lower()
     if provider == "openai":
         return bool(os.getenv("OPENAI_API_KEY"))
