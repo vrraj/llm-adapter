@@ -9,7 +9,7 @@ Provider-agnostic LLM adapter for **text generation + embeddings** with a **regi
 
 Currently supports OpenAI and Gemini (extensible architecture for additional providers).
 
-- **PyPI:**   https://pypi.org/project/vrraj-llm-adapter
+- **PyPI:** https://pypi.org/project/vrraj-llm-adapter
 - **GitHub:** https://github.com/vrraj/llm-adapter
 
 
@@ -36,12 +36,12 @@ pip install vrraj-llm-adapter
 
 ## Quickstart
 
+> **Requires API keys:** `OPENAI_API_KEY` and/or `GEMINI_API_KEY`
+
 The examples below use a registry model key for `model=` (for example: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`). For a complete list of default model keys, see [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md) or print keys programmatically (snippet below)
 
 ### Option A: Run a ready-to-use example script
 Download and run a ready-to-use example script for text generation and embeddings for openai and gemini
-
-**Requires API keys** (OPENAI_API_KEY and/or GEMINI_API_KEY).
 
 ```bash
 curl -L -O https://raw.githubusercontent.com/vrraj/llm-adapter/main/examples/llm_adapter_basic_usage.py
@@ -51,8 +51,6 @@ python llm_adapter_basic_usage.py
 
 
 ### Option B: Call the API directly
-
-**Requires API keys** (OPENAI_API_KEY and/or GEMINI_API_KEY).
 
 ```python
 from llm_adapter import llm_adapter
@@ -343,8 +341,7 @@ except LLMError as e:
 
 ## Development And Demo UI
 
-Running the **demo UI** (runs on port 8100) and/or **customize** the code.
-The package includes a **Makefile** with quick start, stop and other helpful commands.
+Do this to run the **demo UI** (runs on port 8100) or **customize** the code.
 
 1. Clone the repository and run the setup script.
 
@@ -354,7 +351,7 @@ cd llm-adapter
 bash scripts/llm_adapter_setup.sh
 ```
 
->This quick setup script (scripts/llm_adapter_setup.sh) checks prerequisites (`python3`, `make`), creates `.env` if missing, sets up a local `.venv`, installs the package (`pip install -e .`), and shows **next steps**. The demo UI and FastAPI server run in this `.venv` virtual environment. Safe to run multiple times.
+>This script (scripts/llm_adapter_setup.sh) checks prerequisites (`python3`, `make`), creates `.env` if missing, sets up a local `.venv`, installs the package (`pip install -e .`), and shows **next steps**. The demo UI and FastAPI server run in this `.venv` virtual environment. Safe to run multiple times.
 
 2. Set required API keys (see **Environment variables** section below).
 
@@ -379,6 +376,11 @@ If you prefer not to use the Makefile helpers, you can start the FastAPI server 
 uvicorn llm_adapter_demo.api:app --reload --port 8100
 ```
 
+The Interactive Playground will be available at:
+
+```
+http://localhost:8100/ui/
+```
 
 ### For Developers: Running Tests
 
