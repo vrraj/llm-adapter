@@ -9,7 +9,7 @@ Provider-agnostic LLM adapter for **text generation + embeddings** with a **regi
 
 Currently supports OpenAI and Gemini (extensible architecture for additional providers).
 
-- **PyPI:  ** https://pypi.org/project/vrraj-llm-adapter
+- **PyPI:**   https://pypi.org/project/vrraj-llm-adapter
 - **GitHub:** https://github.com/vrraj/llm-adapter
 
 
