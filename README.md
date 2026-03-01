@@ -9,7 +9,7 @@ Provider-agnostic LLM adapter for **text generation + embeddings** with a **regi
 
 Currently supports OpenAI and Gemini (extensible architecture for additional providers).
 
-- **PyPI:** https://pypi.org/project/vrraj-llm-adapter
+- **PyPI:  ** https://pypi.org/project/vrraj-llm-adapter
 - **GitHub:** https://github.com/vrraj/llm-adapter
 
 
@@ -41,7 +41,7 @@ The examples below use a registry model key for `model=` (for example: `openai:g
 ### Option A: Run a ready-to-use example script
 Download and run a ready-to-use example script for text generation and embeddings for openai and gemini
 
-> Requires OPENAI_API_KEY or GEMINI_API_KEY already set.
+**Requires API keys** (OPENAI_API_KEY and/or GEMINI_API_KEY).
 
 ```bash
 curl -L -O https://raw.githubusercontent.com/vrraj/llm-adapter/main/examples/llm_adapter_basic_usage.py
@@ -52,7 +52,7 @@ python llm_adapter_basic_usage.py
 
 ### Option B: Call the API directly
 
-> Requires OPENAI_API_KEY or GEMINI_API_KEY already set.
+**Requires API keys** (OPENAI_API_KEY and/or GEMINI_API_KEY).
 
 ```python
 from llm_adapter import llm_adapter
