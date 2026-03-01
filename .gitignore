@@ -20,6 +20,9 @@ wheels/
 .installed.cfg
 *.egg
 
+# Python version management
+.python-version
+
 # Virtual Environment
 .venv/
 venv/
