@@ -1,5 +1,5 @@
 # Examples
-These scripts demonstrate real-world usage patterns of the public API documented in API_REFERENCE.md.
+These scripts demonstrate real-world usage patterns of the public API documented in docs/API_REFERENCE.md.
 
 This directory contains practical examples demonstrating how to use the LLM Adapter for various use cases. Each example is self-contained and can be run independently.
 
@@ -458,7 +458,7 @@ Examples are intentionally:
 
 - Import Errors: Ensure the package is installed (`pip install vrraj-llm-adapter`)
 - Missing API Keys: Verify required environment variables are set
-- Model Not Found: Confirm the registry key exists in `MODEL_REGISTRY.md`
+- Model Not Found: Confirm the registry key exists in `docs/MODEL_REGISTRY.md`
 - Access Denied: Check `LLM_ADAPTER_ALLOWED_MODELS` configuration
 
 ### Debug Mode
@@ -472,6 +472,6 @@ python examples/llm_adapter_basic_usage.py
 
 ### Getting Help
 
-- Check the [API Reference](https://github.com/vrraj/llm-adapter/blob/main/API_REFERENCE.md)
-- Review the [Model Registry](https://github.com/vrraj/llm-adapter/blob/main/MODEL_REGISTRY.md)
+- Check the [API Reference](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md)
+- Review the [Model Registry](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md)
 - Open an issue on GitHub for specific problems
