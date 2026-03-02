@@ -57,7 +57,7 @@ This is the first public release. The complete API surface is documented in [doc
 - **[docs/API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md)** — Complete method signatures and response contracts
 - **[docs/MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md)** — Registry architecture and extension guide
 - **[examples/README.md](https://github.com/vrraj/llm-adapter/blob/main/examples/README.md)** — Structured learning paths and usage patterns
-- **[docs/ReleaseNotes.md](https://github.com/vrraj/llm-adapter/blob/main/docs/ReleaseNotes.md)** — Version history
+- **[ReleaseNotes.md](https://github.com/vrraj/llm-adapter/blob/main/ReleaseNotes.md)** — Version history
 
 ---
 
