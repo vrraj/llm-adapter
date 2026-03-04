@@ -16,8 +16,8 @@ from llm_adapter import llm_adapter
 
 resp = llm_adapter.create(
     model="openai:gpt-4o-mini", # for gemini, use "gemini:openai-3-flash-preview"
-    input="Write a one-sentence bedtime story about a unicorn.",
-    max_output_tokens=100,
+    input="Explain quantum computing in simple terms.",
+    max_output_tokens=300,
 )
 
 # Normalize to stable app-facing schema
