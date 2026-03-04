@@ -45,7 +45,7 @@ print(result["usage"])
 
 - [Development Guide](DEVELOPMENT.md) - Contributing, development setup, and demo UI
 
-$# Interactive Demo UI
+## Interactive Demo UI
 
 The repository includes a FastAPI-powered **interactive playground** for testing.
 
