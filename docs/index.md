@@ -47,6 +47,8 @@ print(result["usage"])
 
 - [Development Guide](DEVELOPMENT.md) - Contributing, development setup, and demo UI
 
+- [Story on Medium](https://medium.com/@vr.rajkumar99/beyond-the-api-a-practical-registry-driven-adapter-for-openai-and-gemini-1298b437f41a) - Beyond the API: A Practical Registry-Driven Adapter for OpenAI and Gemini
+
 ## Interactive Demo UI
 
 The repository includes a FastAPI-powered **interactive playground** for testing.
