@@ -10,7 +10,8 @@ Includes a FastAPI-powered **interactive playground** for testing models, custom
 pip install vrraj-llm-adapter
 ```
 ## Quick Example
-*Requires provider API keys. See README for setup.*
+
+Requires **LLM provider API keys**. See README for setup.
 
 ```python
 from llm_adapter import llm_adapter
