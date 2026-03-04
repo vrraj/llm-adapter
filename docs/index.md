@@ -44,3 +44,12 @@ print(result["usage"])
 - [Model Registry Guide](MODEL_REGISTRY.md) - Model configuration, reasoning policies, and extensible custom registry
 
 - [Development Guide](DEVELOPMENT.md) - Contributing, development setup, and demo UI
+
+# Interactive Demo UI
+
+The repository includes a FastAPI-powered **interactive playground** for testing.
+
+This allows developers to experiment with models, registry configuration, and adapter behavior without writing code.
+
+→ See setup instructions in the README:  [Development and Demo UI]
+(https://github.com/vrraj/llm-adapter#development-and-demo-ui)
