@@ -1,15 +1,25 @@
 # vrraj-llm-adapter
 
-A Python library that provides a unified adapter interface for multiple
-LLM providers including OpenAI and Google Gemini.
+Provider-agnostic Python adapter for LLM text generation and embeddings.
 
-## Links
+Supports OpenAI and Google Gemini with a unified interface and normalized request/response schema.
 
-- [GitHub Repository](https://github.com/vrraj/llm-adapter)
-- [PyPI Package](https://pypi.org/project/vrraj-llm-adapter/)
+## Project Links
+
+- GitHub Repository  
+  https://github.com/vrraj/llm-adapter
+
+- PyPI Package  
+  https://pypi.org/project/vrraj-llm-adapter/
+
+
+## Detailed Documentation
+
+
 - [Full Documentation (README)](https://github.com/vrraj/llm-adapter#readme)
 
+- [API Reference](API_REFERENCE.md) - Complete API documentation and usage examples
 
-## API Reference
+- [Model Registry Guide](MODEL_REGISTRY.md) - Model configuration, reasoning policies, and registry setup
 
-See the [API Reference](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md) for complete API documentation.
+- [Development Guide](DEVELOPMENT.md) - Contributing, development setup, and demo UI
