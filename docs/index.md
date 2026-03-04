@@ -9,7 +9,7 @@ Supports **OpenAI** and **Google Gemini** with a unified interface and normalize
 ```bash
 pip install vrraj-llm-adapter
 ```
-### Quick Example
+## Quick Example
 
 ```python
 from llm_adapter import llm_adapter
@@ -45,7 +45,7 @@ print(result["usage"])
 
 - [Development Guide](DEVELOPMENT.md) - Contributing, development setup, and demo UI
 
-# Interactive Demo UI
+$# Interactive Demo UI
 
 The repository includes a FastAPI-powered **interactive playground** for testing.
 
