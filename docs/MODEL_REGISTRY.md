@@ -317,6 +317,34 @@ limits={
 ```
 
 #### `reasoning_policy` - Reasoning Configuration
+
+##### Policy Modes: Budget vs Level
+
+Gemini reasoning supports two distinct approaches with different token allocation strategies:
+
+**Budget Policy (`gemini_budget`)** - **Fixed token allocation**
+- Assigns exact thinking token counts from `budget_map`
+- **Does NOT inflate** `max_output_tokens` - your visible limit stays unchanged
+- Thinking tokens consume from your total token budget
+- Use when: You need precise token cost control and predictable billing
+
+**Level Policy (`gemini_level`)** - **Percentage-based allocation**  
+- Maps abstract levels to thinking intensities via `reserve_ratio`
+- **Automatically inflates** `max_output_tokens` by the specified percentage
+- Thinking tokens are reserved from the inflated budget
+- Use when: You want simple intensity control without managing exact counts
+
+**Example Behavior Comparison:**
+```python
+# Budget policy: max_output_tokens=1000, reasoning_effort="medium"
+# Result: thinking_budget=2000 + max_output_tokens=1000 = 3000 total tokens
+
+# Level policy: max_output_tokens=1000, reasoning_effort="medium"  
+# Result: max_output_tokens inflated to 1500 (50% bump) + thinking tokens reserved
+```
+
+##### Configuration Examples
+
 ```python
 # OpenAI-style reasoning
 reasoning_policy={
@@ -324,22 +352,22 @@ reasoning_policy={
     "default": "low"
 }
 
-# Gemini level-based reasoning
+# Gemini level-based reasoning (inflates max_output_tokens)
 reasoning_policy={
     "mode": "gemini_level",
     "param": "thinking_level",
     "default": "minimal",
     "map": {"low": "low", "medium": "medium"},
-    "reserve_ratio": {"low": 0.30, "medium": 0.50},
+    "reserve_ratio": {"low": 0.30, "medium": 0.50},  # % bump to max_output_tokens
     "counts_against_output": True
 }
 
-# Gemini budget-based reasoning
+# Gemini budget-based reasoning (fixed token allocation)
 reasoning_policy={
     "mode": "gemini_budget",
     "param": "thinking_budget",
     "default": "low",
-    "budget_map": {"low": 1000, "medium": 2000},
+    "budget_map": {"low": 1000, "medium": 2000},  # Exact thinking token counts
     "counts_against_output": True
 }
 ```

@@ -1,7 +1,7 @@
 # vrraj-llm-adapter
 
 > **Development and Demo UI:**  
-> This repository ships with a FastAPI-powered **Interactive Playground** for validating text generation, embeddings, and registry configuration end-to-end. See **[Development And Demo UI](#development-and-demo-ui)** below for details and setup instructions.
+> This repository ships with a FastAPI-powered **Interactive Playground** for validating text generation, embeddings, and registry configuration end-to-end. See **[Development And Demo UI](#development-and-demo-ui)** section below for details and setup instructions.
 
 ![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
@@ -30,6 +30,7 @@ pip install vrraj-llm-adapter
 - **Normalized responses** (text, tool calls, reasoning, usage)
 - **Model Allowlist** (access control)
 - **Pricing metadata** in registry for cost visibility
+- **Embedding controls** (optional normalization + configurable output dimensionality)
 
 
 
