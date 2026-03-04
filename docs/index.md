@@ -1,8 +1,7 @@
 # vrraj-llm-adapter
 
-Provider-agnostic, registry-driven Python adapter for **LLM text generation and embeddings**.
-
-Supports **OpenAI** and **Google Gemini** with a unified interface and normalized request/response schema.
+Provider-agnostic Python adapter for LLM text generation and embeddings, supporting **OpenAI** and **Google Gemini** with a unified interface and normalized response schema. 
+Includes a FastAPI-powered **interactive playground** for testing models, custom configurations, and adapter behavior.
 
 ## Install
 
