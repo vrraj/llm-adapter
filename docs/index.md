@@ -51,5 +51,4 @@ The repository includes a FastAPI-powered **interactive playground** for testing
 
 This allows developers to experiment with models, registry configuration, and adapter behavior without writing code.
 
-→ See setup instructions in the README:  [Development and Demo UI]
-(https://github.com/vrraj/llm-adapter#development-and-demo-ui)
+→ See setup instructions in the README: [Development and Demo UI](https://github.com/vrraj/llm-adapter#development-and-demo-ui)
