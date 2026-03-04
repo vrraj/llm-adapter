@@ -6,11 +6,9 @@ Supports OpenAI and Google Gemini with a unified interface and normalized reques
 
 ## Project Links
 
-- GitHub Repository  
-  https://github.com/vrraj/llm-adapter
+- [GitHub Repository](https://github.com/vrraj/llm-adapter)
 
-- PyPI Package  
-  https://pypi.org/project/vrraj-llm-adapter/
+- [PyPI Package](https://pypi.org/project/vrraj-llm-adapter/)
 
 
 ## Detailed Documentation
