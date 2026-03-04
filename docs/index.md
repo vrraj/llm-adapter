@@ -4,6 +4,29 @@ Provider-agnostic Python adapter for LLM text generation and embeddings.
 
 Supports OpenAI and Google Gemini with a unified interface and normalized request/response schema.
 
+## Installation
+
+```bash
+pip install vrraj-llm-adapter
+```
+### Quick Example
+
+```python
+from llm_adapter import llm_adapter
+
+resp = llm_adapter.create(
+    model="openai:gpt-4o-mini", # for gemini, use "gemini:openai-3-flash-preview"
+    input="Write a one-sentence bedtime story about a unicorn.",
+    max_output_tokens=100,
+)
+
+# Normalize to stable app-facing schema
+result = llm_adapter.normalize_adapter_response(resp)
+
+print(result["text"])
+print(result["usage"])
+```
+
 ## Project Links
 
 - [GitHub Repository](https://github.com/vrraj/llm-adapter)
