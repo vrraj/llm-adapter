@@ -5,7 +5,7 @@ Test script to verify the tool sanitization fix works correctly.
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from llm_adapter.llm_adapter import LLMAdapter
 
