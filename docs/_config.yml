@@ -2,7 +2,7 @@
 # --- Site Metadata & SEO Defaults ---
 title: "LLM Adapter"
 tagline: "Unified Python Wrapper for OpenAI & Gemini"
-description: "Provider-agnostic, registry-driven adapter for text generation and embeddings with normalized outputs."
+description: "Registry-driven Python adapter that lets developers call OpenAI and Gemini using the same API while returning normalized responses, tool calls, and usage metrics."
 url: "https://vrraj.github.io"
 baseurl: "/llm-adapter"
 
@@ -21,19 +21,19 @@ defaults:
       path: "api-reference.md"
     values:
       title: "API Reference | LLM Adapter"
-      description: "Technical specs for create and normalize methods, including AdapterResponse and LLMResult schemas."
+      description: "Detailed API documentation for the create, embeddings, and normalization methods, including request parameters, AdapterResponse structure, and usage fields returned by the adapter."
 
   - scope:
       path: "model-registry.md"
     values:
       title: "Model Registry Guide | Supported LLMs"
-      description: "Comprehensive guide to registry keys, provider routing (OpenAI/Gemini), and custom registry extensions."
+      description: "Guide to the model registry architecture, explaining how model keys map to OpenAI and Gemini providers, how parameters are validated, and how developers can extend the registry with custom models."
 
   - scope:
       path: "development.md"
     values:
       title: "Development & Interactive Playground"
-      description: "Instructions for local setup, running the FastAPI demo UI, and executing integration tests."
+      description: "Developer guide for running the project locally, launching the interactive FastAPI playground, and testing model calls across OpenAI and Gemini providers."
 
 # --- Theme Configuration ---
 theme: jekyll-theme-cayman
