@@ -108,6 +108,8 @@ async function init() {
     return ep === "embeddings" || ep === "embed_content";
   }
 
+  // Extract reasoning from <thought> tags in raw provider response
+  // This is only used with generate_raw.output_text, not with normalized responses
   function splitThoughts(text) {
     const s = String(text || "");
     const open = s.indexOf("<thought>");
@@ -355,16 +357,14 @@ async function init() {
 
       if (body.ok) {
         if (!embedMode) {
+          // Extract reasoning from generate.reasoning field (via normalized response)
           const backendReasoning = body.reasoning_text || "";
           const backendAnswer = body.answer_text || "";
-          if (!backendReasoning && backendAnswer.includes("<thought>") && backendAnswer.includes("</thought>")) {
-            const parts = splitThoughts(backendAnswer);
-            reasoningOutput.textContent = parts.reasoning || "";
-            answerOutput.textContent = parts.answer || "";
-          } else {
-            reasoningOutput.textContent = backendReasoning;
-            answerOutput.textContent = backendAnswer;
-          }
+          
+          // Note: splitThoughts is only for generate_raw.output_text, not normalized responses
+          // Using normalized response, so reasoning should already be extracted
+          reasoningOutput.textContent = backendReasoning;
+          answerOutput.textContent = backendAnswer;
           appendLog("Response ok. Usage: " + JSON.stringify(body.raw_usage || {}, null, 2));
           
           // Show status and finish reason from the response
