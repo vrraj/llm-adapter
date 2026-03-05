@@ -1,0 +1,30 @@
+# --- Site Metadata ---
+title: "vrraj-llm-adapter"
+description: "A provider-agnostic LLM abstraction layer for OpenAI and Google Gemini. Standardize your AI infrastructure with normalized response schemas."
+url: "https://vrraj.github.io"
+baseurl: "/llm-adapter"
+
+# --- Theme Configuration ---
+theme: jekyll-theme-cayman
+show_downloads: true  
+
+# --- Google Analytics (GA4) ---
+
+google_analytics: G-YMXDNS4Y0L
+
+# --- Plugins ---
+plugins:
+  - jekyll-seo-tag
+  - jekyll-gist
+
+# --- SEO Specifics ---
+#  GitHub profile : vrraj/llm-adapter
+
+
+# --- Build Settings ---
+markdown: kramdown
+highlighter: rouge
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor

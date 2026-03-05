@@ -1,10 +1,26 @@
+---
+layout: default
+title: "vrraj-llm-adapter: Provider-agnostic LLM Abstraction Layer"
+description: "A standardized Python wrapper for OpenAI and Gemini that normalizes responses into a single predictable API."
+---
+
 # vrraj-llm-adapter
+https://img.shields.io/pypi/v/vrraj-llm-adapter?style=flat-square&color=4c1
+https://img.shields.io/pypi/l/vrraj-llm-adapter
 
-Provider-agnostic Python adapter for LLM text generation and embeddings, supporting **OpenAI** and **Google Gemini** with a unified interface and normalized response schema.
+Provider-agnostic Python adapter for LLM text **generation** and **embeddings**. Seamlessly support **OpenAI** and **Google Gemini** with a unified interface and normalized response schema.
 
-Includes a FastAPI-powered **interactive playground** for testing models, custom configurations, and adapter behavior.
+## Key Features
 
-## Install
+- **Unified API**: Switch between openai and gemini by changing a single string - the model identifier.
+
+- **Stable Schemas**: Stop parsing different JSON structures; get consistent LLMResult objects every time.
+
+- **Interactive Playground**: Includes a built-in FastAPI dashboard to test model configurations, custom registry testing and compare responses in real-time.
+
+- **Registry-Driven**: Manage model metadata, pricing, and routing through a centralized registry.
+
+    ## Install
 
 ```bash
 pip install vrraj-llm-adapter

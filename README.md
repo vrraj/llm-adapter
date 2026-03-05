@@ -1,4 +1,8 @@
-# vrraj-llm-adapter
+# vrraj-llm-adapter 
+[![PyPI - Version](https://shields.io)](https://pypi.org)
+[![GitHub Release](https://shields.io)](https://github.com)
+
+
 
 > **Development and Demo UI:**  
 > This repository ships with a FastAPI-powered **Interactive Playground** for validating text generation, embeddings, and registry configuration end-to-end. See **[Development And Demo UI](#development-and-demo-ui)** section below for details and setup instructions.
