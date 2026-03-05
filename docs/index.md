@@ -1,7 +1,7 @@
 ---
 layout: default
-title: "vrraj-llm-adapter: Registry-Driven LLM Adapter for OpenAI and Gemini"
-description: "A registry-driven Python adapter that lets you call OpenAI and Gemini using the same API and receive a consistent response format."
+title: "Registry-Driven LLM Adapter for OpenAI and Gemini"
+description: "vrraj-llm-adapter: A Python adapter that lets you call OpenAI and Gemini using the same API and receive a consistent response format."
 ---
 
 # vrraj-llm-adapter
