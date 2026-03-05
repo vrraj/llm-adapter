@@ -96,7 +96,12 @@ def create(
 - `top_p`: `float` - Nucleus sampling (0.0-1.0)
 - `tools`: `list[dict]` - Tool/function definitions
 - `tool_choice`: `str | dict` - Tool choice strategy
-- `include_thoughts`: `bool` - Include reasoning traces when supported
+- `include_thoughts`: `bool` - Include reasoning traces when supported (legacy, use `reasoning_effort` instead)
+
+**Response Fields:**
+- `text`: `str` - Main response text
+- `reasoning`: `str` - Reasoning/thinking content from `generate.reasoning` field
+- `usage`: `dict` - Token usage information
 
 **Returns:**
 - Non-streaming: `AdapterResponse`
@@ -632,7 +637,7 @@ except LLMError as e:
 |-----------|----------|-----------|-------|
 | `reasoning_effort` | OpenAI, Gemini | 🔄 Adapter-level | Normalized by adapter |
 | `tools`, `tool_choice` | OpenAI, Gemini | 🔄 Adapter-level | Normalized by adapter |
-| `include_thoughts` | Gemini | 🔄 Adapter-level | Gemini-specific reasoning |
+| `include_thoughts` | Gemini | ⚠️ Legacy | Use `reasoning_effort` instead; reasoning available via `generate.reasoning` field |
 | `normalize_embedding` | Gemini | 🔄 Provider-level | Gemini embeddings only |
 | `dimensions` | OpenAI, Gemini | 🔄 Provider-level | When supported |
 | `task_type`, `output_dimensionality` | Gemini native | 🔄 Provider-level | Native SDK only |

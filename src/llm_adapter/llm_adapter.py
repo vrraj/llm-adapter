@@ -1772,21 +1772,57 @@ class LLMAdapter:
         return prepared_kwargs
 
     def _sanitize_tools_for_gemini_adapter(self, tools: Any) -> Any:
+        """Return a Gemini-friendly tools list.
+
+        - Accepts either flattened or nested OpenAI-style tool specs.
+        - Ensures the outgoing format is nested {"type":"function","function":{...}}.
+        - Recursively strips JSON schema keys that commonly trigger 400s in
+          Gemini adapters (e.g., "default", "additionalProperties").
+        """
         if not isinstance(tools, list):
             return tools
-        out = []
-        for t in tools:
-            if not isinstance(t, dict):
-                out.append(t)
+
+        def _clean_schema(obj: Any) -> Any:
+            if not isinstance(obj, dict):
+                return obj
+            forbidden = {"default", "additionalProperties", "$schema", "title"}
+            out: Dict[str, Any] = {}
+            for k, v in obj.items():
+                if k in forbidden:
+                    continue
+                out[k] = _clean_schema(v)
+            return out
+
+        cleaned: list[Any] = []
+        for tool in tools:
+            if not isinstance(tool, dict):
                 continue
-            if t.get("type") == "function" and isinstance(t.get("function"), dict):
-                out.append(t)
+
+            func = tool.get("function")
+            if not isinstance(func, dict):
+                # Flattened form: treat the dict itself as the function spec.
+                func = tool
+
+            name = func.get("name")
+            if not name:
+                # Skip tools without a usable name; better to ignore than fail hard.
                 continue
-            if "function" in t and isinstance(t.get("function"), dict):
-                out.append({"type": "function", "function": t.get("function")})
-                continue
-            out.append(t)
-        return out
+
+            params = func.get("parameters") or {"type": "object", "properties": {}}
+            params = _clean_schema(params)
+
+            cleaned.append(
+                {
+                    "type": tool.get("type", "function"),
+                    "function": {
+                        "name": name,
+                        "description": func.get("description", ""),
+                        "parameters": params,
+                    },
+                }
+            )
+        
+        return cleaned or tools
 
     def _wrap_gemini_chatcompletion_as_responses(self, resp: Any, *, model_key: str, resolved_model: str) -> AdapterResponse:
         """Wrap a Gemini (OpenAI-compatible) chat.completions response into a minimal Responses-like shape.
