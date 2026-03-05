@@ -6,7 +6,7 @@
 
 `vrraj-llm-adapter` provides a unified, registry-driven interface for LLM text generation and embeddings across supported providers (currently OpenAI and Gemini), with an extensible architecture for additional providers.
 
-This is the first public release. The complete API surface is documented in [docs/API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md).
+This is the first public release. The complete API surface is documented in [docs/api-reference.md](https://github.com/vrraj/llm-adapter/blob/main/docs/api-reference.md).
 
 ---
 
@@ -47,15 +47,15 @@ This is the first public release. The complete API surface is documented in [doc
 
 ### Pricing Support
 - `get_pricing_for_model()` helper
-- Per-model token pricing metadata (see [docs/API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md) for field details)
+- Per-model token pricing metadata (see [docs/api-reference.md](https://github.com/vrraj/llm-adapter/blob/main/docs/api-reference.md) for field details)
 
 ---
 
 ## Documentation Structure
 
 - **[README.md](https://github.com/vrraj/llm-adapter/blob/main/README.md)** — Quick start and high-level overview
-- **[docs/API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md)** — Complete method signatures and response contracts
-- **[docs/MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md)** — Registry architecture and extension guide
+- **[docs/api-reference.md](https://github.com/vrraj/llm-adapter/blob/main/docs/api-reference.md)** — Complete method signatures and response contracts
+- **[docs/model-registry.md](https://github.com/vrraj/llm-adapter/blob/main/docs/model-registry.md)** — Registry architecture and extension guide
 - **[examples/README.md](https://github.com/vrraj/llm-adapter/blob/main/examples/README.md)** — Structured learning paths and usage patterns
 - **[ReleaseNotes.md](https://github.com/vrraj/llm-adapter/blob/main/ReleaseNotes.md)** — Version history
 
