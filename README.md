@@ -49,7 +49,7 @@ cp .env.example .env
 # Edit .env with your API keys
 ```
 
-The examples below use a registry model key for `model=` (for example: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`). For a complete list of default model keys, see [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md) or print keys programmatically (snippet below)
+The examples below use a registry model key for `model=` (for example: `openai:gpt-4o-mini`, `gemini:openai-3-flash-preview`). For a complete list of default model keys, see [model-registry.md](https://github.com/vrraj/llm-adapter/blob/main/docs/model-registry.md) or print keys programmatically (snippet below)
 
 ### Option A: Run a ready-to-use example script
 Download and run a ready-to-use example script for text generation and embeddings for openai and gemini
@@ -110,7 +110,7 @@ The source includes developer tooling to test **custom model registries** (overr
 - `llm_adapter.create_embedding(...) -> EmbeddingResponse` — create embeddings
 - `llm_adapter.get_pricing_for_model(...) -> Pricing | None` — pricing metadata lookup
 
->📋 For **complete method signatures, parameter details, and full response structures**, see: [API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md)
+>📋 For **complete method signatures, parameter details, and full response structures**, see: [api-reference.md](https://github.com/vrraj/llm-adapter/blob/main/docs/api-reference.md)
 
 ### AdapterResponse (from `create`)
 
@@ -190,10 +190,10 @@ Use `result["text"]` from `normalize_adapter_response()` for display-safe text; 
 
 ## Documentation & References
 
-- **Complete API Reference:** [API_REFERENCE.md](https://github.com/vrraj/llm-adapter/blob/main/docs/API_REFERENCE.md)
-- **Model Registry docs:** [MODEL_REGISTRY.md](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md)
+- **Complete API Reference:** [api-reference.md](https://github.com/vrraj/llm-adapter/blob/main/docs/api-reference.md)
+- **Model Registry docs:** [model-registry.md](https://github.com/vrraj/llm-adapter/blob/main/docs/model-registry.md)
 - **Ready to use Examples:** [examples](https://github.com/vrraj/llm-adapter/tree/main/examples)
-- **Dev notes:** [DEVELOPMENT.md](https://github.com/vrraj/llm-adapter/blob/main/docs/DEVELOPMENT.md)
+- **Dev notes:** [development.md](https://github.com/vrraj/llm-adapter/blob/main/docs/development.md)
 
 ---
 
@@ -321,7 +321,7 @@ export LLM_ADAPTER_ALLOWED_MODELS="openai:gpt-4o-mini,openai:embed_small"
 ```
 
 **For comprehensive registry documentation, see:**
-- https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md
+- https://github.com/vrraj/llm-adapter/blob/main/docs/model-registry.md
 - https://github.com/vrraj/llm-adapter/blob/main/examples/custom_registry.py
 - https://github.com/vrraj/llm-adapter/blob/main/src/llm_adapter/model_registry.py
 
@@ -409,7 +409,7 @@ pytest -m "integration or unit"
 
 ## Project structure
 
-For internal design and architecture notes, see [DEVELOPMENT.md](https://github.com/vrraj/llm-adapter/blob/main/docs/DEVELOPMENT.md).
+For internal design and architecture notes, see [development.md](https://github.com/vrraj/llm-adapter/blob/main/docs/development.md).
 
 ## ModelSpec: Structured Configuration
 
@@ -518,7 +518,7 @@ To add support for new models or override existing configurations, use **custom 
 4. **Test via Demo UI** - The Interactive Playground supports custom registry testing
 
 📖 **For complete custom registry documentation**, see:
-- [MODEL_REGISTRY.md - Custom Registry](https://github.com/vrraj/llm-adapter/blob/main/docs/MODEL_REGISTRY.md#custom-registry)
+- [model-registry.md - Custom Registry](https://github.com/vrraj/llm-adapter/blob/main/docs/model-registry.md#custom-registry)
 - [examples/custom_registry.py](https://github.com/vrraj/llm-adapter/blob/main/examples/custom_registry.py) - Working example
 
 ## Development
