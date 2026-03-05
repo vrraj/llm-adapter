@@ -1,7 +1,7 @@
 ---
 layout: default
-title: "vrraj-llm-adapter: Provider-agnostic LLM Abstraction Layer"
-description: "A standardized Python wrapper for OpenAI and Gemini that normalizes responses into a single predictable API."
+title: "vrraj-llm-adapter: Registry-Driven LLM Adapter for OpenAI and Gemini"
+description: "A registry-driven Python adapter that lets you call OpenAI and Gemini using the same API and receive a consistent response format."
 ---
 
 # vrraj-llm-adapter
@@ -19,7 +19,7 @@ description: "A standardized Python wrapper for OpenAI and Gemini that normalize
   </a>
 </p>
 
-Provider-agnostic Python adapter for LLM text **generation** and **embeddings**. Seamlessly support **OpenAI** and **Google Gemini** with a unified interface and normalized response schema.
+Provider-agnostic Python adapter for LLM text **generation** and **embeddings**. Call **OpenAI** and **Google Gemini** using the same API while receiving a consistent, normalized response format.
 
 ## Key Features
 
