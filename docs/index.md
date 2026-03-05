@@ -5,8 +5,19 @@ description: "A standardized Python wrapper for OpenAI and Gemini that normalize
 ---
 
 # vrraj-llm-adapter
-https://img.shields.io/pypi/v/vrraj-llm-adapter?style=flat-square&color=4c1
-https://img.shields.io/pypi/l/vrraj-llm-adapter
+
+
+<p align="left">
+  <a href="https://pypi.org/project/vrraj-llm-adapter/">
+    <img src="https://img.shields.io/pypi/v/vrraj-llm-adapter?color=blue&logo=pypi&logoColor=white" alt="PyPI - Version">
+  </a>
+  <a href="https://github.com/vrraj/llm-adapter/releases">
+    <img src="https://img.shields.io/github/v/release/vrraj/llm-adapter?label=github%20release&color=orange&logo=github" alt="GitHub Release">
+  </a>
+  <a href="https://github.com/vrraj/llm-adapter/actions">
+    <img src="https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg" alt="CI Status">
+  </a>
+</p>
 
 Provider-agnostic Python adapter for LLM text **generation** and **embeddings**. Seamlessly support **OpenAI** and **Google Gemini** with a unified interface and normalized response schema.
 
@@ -20,7 +31,7 @@ Provider-agnostic Python adapter for LLM text **generation** and **embeddings**.
 
 - **Registry-Driven**: Manage model metadata, pricing, and routing through a centralized registry.
 
-    ## Install
+## Install
 
 ```bash
 pip install vrraj-llm-adapter
