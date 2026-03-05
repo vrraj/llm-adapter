@@ -1,7 +1,7 @@
 # --- Site Metadata ---
 title: "LLM Adapter"
 tagline: "Unified Python wrapper for OpenAI and Gemini"
-description: "A provider-agnostic LLM abstraction layer for OpenAI and Google Gemini. Standardize your AI infrastructure with normalized response schemas."
+description: "Provider-agnostic, registry-driven LLM adapter for text generation and embeddings with normalized outputs - includes an interactive test UI"
 url: "https://vrraj.github.io"
 baseurl: "/llm-adapter"
 
