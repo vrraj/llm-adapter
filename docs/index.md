@@ -68,11 +68,11 @@ print(result["usage"])
 
 - [Full Documentation (README)](https://github.com/vrraj/llm-adapter#readme)
 
-- [API Reference](API_REFERENCE.md) - Complete API documentation and usage examples
+- [API Reference](api-reference.md) - Complete API documentation and usage examples
 
-- [Model Registry Guide](MODEL_REGISTRY.md) - Model configuration, reasoning policies, and extensible custom registry
+- [Model Registry Guide](model-registry.md) - Model configuration, reasoning policies, and extensible custom registry
 
-- [Development Guide](DEVELOPMENT.md) - Contributing, development setup, and demo UI
+- [Development Guide](development.md) - Contributing, development setup, and demo UI
 
 - [Story on Medium](https://medium.com/@vr.rajkumar99/beyond-the-api-a-practical-registry-driven-adapter-for-openai-and-gemini-1298b437f41a) - Beyond the API: A Practical Registry-Driven Adapter for OpenAI and Gemini
 
