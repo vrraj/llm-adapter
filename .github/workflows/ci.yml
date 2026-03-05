@@ -44,3 +44,13 @@ jobs:
       run: |
         python -m build
         python -c "import llm_adapter; print('✅ Package builds successfully')"
+
+  ci-success:
+    name: CI Success
+    needs: test
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Check matrix status
+      if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+      run: exit 1

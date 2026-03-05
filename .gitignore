@@ -74,3 +74,6 @@ build/
 *.swp
 *.swo
 *~
+
+# Windsurf
+.windsurf/

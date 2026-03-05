@@ -1,8 +1,35 @@
+---
+layout: default
+title: "vrraj-llm-adapter: Provider-agnostic LLM Abstraction Layer"
+description: "A standardized Python wrapper for OpenAI and Gemini that normalizes responses into a single predictable API."
+---
+
 # vrraj-llm-adapter
 
-Provider-agnostic Python adapter for LLM text generation and embeddings, supporting **OpenAI** and **Google Gemini** with a unified interface and normalized response schema.
 
-Includes a FastAPI-powered **interactive playground** for testing models, custom configurations, and adapter behavior.
+<p align="left">
+  <a href="https://pypi.org/project/vrraj-llm-adapter/">
+    <img src="https://img.shields.io/pypi/v/vrraj-llm-adapter?color=blue&logo=pypi&logoColor=white" alt="PyPI - Version">
+  </a>
+  <a href="https://github.com/vrraj/llm-adapter/releases">
+    <img src="https://img.shields.io/github/v/release/vrraj/llm-adapter?label=github%20release&color=orange&logo=github" alt="GitHub Release">
+  </a>
+  <a href="https://github.com/vrraj/llm-adapter/actions">
+    <img src="https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg" alt="CI Status">
+  </a>
+</p>
+
+Provider-agnostic Python adapter for LLM text **generation** and **embeddings**. Seamlessly support **OpenAI** and **Google Gemini** with a unified interface and normalized response schema.
+
+## Key Features
+
+- **Unified API**: Switch between openai and gemini by changing a single string - the model identifier.
+
+- **Stable Schemas**: Stop parsing different JSON structures; get consistent LLMResult objects every time.
+
+- **Interactive Playground**: Includes a built-in FastAPI dashboard to test model configurations, custom registry testing and compare responses in real-time.
+
+- **Registry-Driven**: Manage model metadata, pricing, and routing through a centralized registry.
 
 ## Install
 
