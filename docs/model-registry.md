@@ -2,6 +2,12 @@
 
 The model registry maps stable **registry keys** (e.g. `openai:gpt-4o-mini`) to provider-native configurations, enabling provider-agnostic LLM calls.
 
+> **New here?** Start with the project overview on the home page: **[vrraj-llm-adapter docs home](https://vrraj.github.io/llm-adapter/)**.
+>
+> **Source + releases:** GitHub repo and PyPI package are linked from the home page.
+
+> **Note:** Registry keys like `openai:gpt-4o-mini` are stable identifiers that work across different deployment environments. You can also extend the registry with your own models.
+
 ## Discovering Available Models
 
 ### Quick Model Reference (Default model_registry.py)
