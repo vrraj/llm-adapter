@@ -2,6 +2,12 @@
 
 This document contains internal design notes, architecture details, and project structure information for developers working on the llm-adapter codebase.
 
+> **New here?** Start with the project overview on the home page: **[vrraj-llm-adapter docs home](https://vrraj.github.io/llm-adapter/)**.
+>
+> **Source + releases:** GitHub repo and PyPI package are linked from the home page.
+
+> **Note:** This guide covers local development, testing, and extending the adapter. For API usage, see the [API Reference](api-reference.md).
+
 ## Project Structure
 
 ### Core Components
