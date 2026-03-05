@@ -1,13 +1,12 @@
 # vrraj-llm-adapter 
-[![PyPI - Version](https://img.shields.io/pypi/v/vrraj-llm-adapter)](https://pypi.org/project/vrraj-llm-adapter/)
-[![GitHub Release](https://img.shields.io/github/v/release/vrraj/llm-adapter)](https://github.com/vrraj/llm-adapter)
-
+[![PyPI - Version](https://img.shields.io/pypi/v/vrraj-llm-adapter?color=blue&logo=pypi&logoColor=white)](https://pypi.org/project/vrraj-llm-adapter/)
+[![GitHub Release](https://img.shields.io/github/v/release/vrraj/llm-adapter?label=github%20release&color=orange&logo=github)](https://github.com/vrraj/llm-adapter/releases)
+![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
 
 > **Development and Demo UI:**  
 > This repository ships with a FastAPI-powered **Interactive Playground** for validating text generation, embeddings, and registry configuration end-to-end. See **[Development And Demo UI](#development-and-demo-ui)** section below for details and setup instructions.
 
-![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
 Provider-agnostic LLM adapter for **text generation + embeddings** with a **registry-driven routing layer** (capabilities, param policies, pricing metadata, access control), plus **normalized outputs** (text, tool calls, reasoning, usage).
 
