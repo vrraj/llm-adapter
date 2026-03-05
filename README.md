@@ -1,6 +1,6 @@
 # vrraj-llm-adapter 
 [![PyPI - Version](https://img.shields.io/pypi/v/vrraj-llm-adapter)](https://pypi.org/project/vrraj-llm-adapter/)
-[![GitHub Release](https://img.shields.io/github/v/release/vrraj/llm-adapter)](https://github.com/vrraj/llm-adapter/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/vrraj/llm-adapter)](https://github.com/vrraj/llm-adapter)
 
 
 
