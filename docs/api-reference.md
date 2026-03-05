@@ -2,6 +2,10 @@
 
 This document provides the complete API reference for the LLM Adapter, including method signatures, parameter details, response structures, and common usage patterns.
 
+> **New here?** Start with the project overview on the home page: **[vrraj-llm-adapter docs home](https://vrraj.github.io/llm-adapter/)**.
+>
+> **Source + releases:** GitHub repo and PyPI package are linked from the home page.
+
 > **Note:** The package exposes a convenience singleton `llm_adapter` which is an instance of `LLMAdapter`. You can either use this pre-configured instance or create your own `LLMAdapter` instance for custom configuration.
 
 ## Table of Contents
