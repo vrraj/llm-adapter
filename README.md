@@ -614,12 +614,26 @@ To add support for new models or override existing configurations, use **custom 
 
 1. **Create a custom registry** - See `examples/custom_registry.py` for a complete example
 2. **Define ModelInfo entries** - Configure endpoints, capabilities, pricing, and parameter policies
-3. **Load your registry** - Pass it to `LLMAdapter(model_registry=your_registry)` or merge with defaults
+3. **Load your registry** - Use environment variable or pass it to `LLMAdapter(model_registry=your_registry)`
 4. **Test via Demo UI** - The Interactive Playground supports custom registry testing
+
+### Environment Variable Configuration (Recommended)
+
+For easy configuration without code changes, set the `CUSTOM_REGISTRY_PATH` environment variable:
+
+```bash
+# Configure environment (optional):
+export CUSTOM_REGISTRY_PATH=/path/to/your/custom_registry.py
+```
+
+The adapter will automatically load and merge your custom registry with the default registry. This is useful for:
+- Development environments with custom models
+- Production deployments with organization-specific configurations
+- Testing different registry configurations without code changes
 
 📖 **For complete custom registry documentation**, see:
 - [model-registry.md - Custom Registry](https://github.com/vrraj/llm-adapter/blob/main/docs/model-registry.md#custom-registry)
-- [examples/custom_registry.py](https://github.com/vrraj/llm-adapter/blob/main/examples/custom_registry.py) - Working example
+
 
 ## Development
 
