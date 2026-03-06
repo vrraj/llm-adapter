@@ -14,6 +14,7 @@ Currently supports OpenAI and Gemini (extensible architecture for additional pro
 
 - **PyPI:** https://pypi.org/project/vrraj-llm-adapter
 - **GitHub:** https://github.com/vrraj/llm-adapter
+- **Documentation:** https://vrraj.github.io/llm-adapter/
 
 
 ## Install
@@ -278,6 +279,105 @@ for event in llm_adapter.create(model="openai:gpt-4o-mini", input="Hello", strea
         print(event.delta, end="")
 ```
 
+## Tool Calling
+
+The adapter supports provider-agnostic tool calling using the **OpenAI-style function schema**.
+
+Pass tool definitions to `llm_adapter.create(...)`. The model may return one or more tool calls with structured arguments. The host application is responsible for executing those tools and sending the tool results back to the adapter as follow-up context for the final response.
+
+### Tool definition format
+
+Tool definitions use an OpenAI-style JSON schema:
+
+```python
+tools = [
+    {
+        "type": "function",
+        "name": "get_weather",
+        "description": "Get current weather information for a location",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "City name or location (for example: 'New York, NY')"
+                },
+                "units": {
+                    "type": "string",
+                    "enum": ["celsius", "fahrenheit"],
+                    "description": "Temperature units"
+                }
+            },
+            "required": ["location"]
+        }
+    }
+]
+```
+
+### Tool call output format
+
+When the model decides to call a tool, normalized tool calls are returned in `AdapterResponse.tool_calls` and `LLMResult.tool_calls`:
+
+```python
+tool_calls = [
+    {
+        "id": "call_12345",
+        "name": "get_weather",
+        "args": {
+            "location": "New York, NY",
+            "units": "celsius"
+        }
+    }
+]
+```
+
+### Example
+
+```python
+from llm_adapter import llm_adapter
+
+tools = [
+    {
+        "type": "function",
+        "name": "get_weather",
+        "description": "Get weather information",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "City name"
+                }
+            },
+            "required": ["location"]
+        }
+    }
+]
+
+response = llm_adapter.create(
+    model="openai:gpt-4o-mini",
+    input="What's the weather like in New York?",
+    tools=tools
+)
+
+if response.tool_calls:
+    for call in response.tool_calls:
+        tool_name = call["name"]
+        tool_args = call["args"]
+        tool_id = call["id"]
+
+        # Execute the tool in your application
+        result = execute_tool(tool_name, tool_args)
+
+        # Send tool results back to the adapter in your follow-up call
+```
+
+### Notes
+
+- The adapter normalizes tool definitions and emitted tool calls across providers.
+- Tool execution is intentionally handled by the host application, not by the adapter.
+- For application-facing output, use the `create -> normalize_adapter_response` flow.
+
 ### Model Registry & Extensibility
 
 The LLM adapter uses a registry of model definitions (ModelInfo) that control:
@@ -514,12 +614,26 @@ To add support for new models or override existing configurations, use **custom 
 
 1. **Create a custom registry** - See `examples/custom_registry.py` for a complete example
 2. **Define ModelInfo entries** - Configure endpoints, capabilities, pricing, and parameter policies
-3. **Load your registry** - Pass it to `LLMAdapter(model_registry=your_registry)` or merge with defaults
+3. **Load your registry** - Use environment variable or pass it to `LLMAdapter(model_registry=your_registry)`
 4. **Test via Demo UI** - The Interactive Playground supports custom registry testing
+
+### Environment Variable Configuration (Recommended)
+
+For easy configuration without code changes, set the `CUSTOM_REGISTRY_PATH` environment variable:
+
+```bash
+# Configure environment (optional):
+export CUSTOM_REGISTRY_PATH=/path/to/your/custom_registry.py
+```
+
+The adapter will automatically load and merge your custom registry with the default registry. This is useful for:
+- Development environments with custom models
+- Production deployments with organization-specific configurations
+- Testing different registry configurations without code changes
 
 📖 **For complete custom registry documentation**, see:
 - [model-registry.md - Custom Registry](https://github.com/vrraj/llm-adapter/blob/main/docs/model-registry.md#custom-registry)
-- [examples/custom_registry.py](https://github.com/vrraj/llm-adapter/blob/main/examples/custom_registry.py) - Working example
+
 
 ## Development
 

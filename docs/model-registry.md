@@ -591,6 +591,23 @@ validate_registry(REGISTRY)
 ```
 
 #### Using Custom Registry
+
+##### Method 1: Environment Variable Configuration (Recommended)
+
+For easy configuration without code changes, set the `CUSTOM_REGISTRY_PATH` environment variable:
+
+```bash
+# Configure environment (optional):
+export CUSTOM_REGISTRY_PATH=/path/to/your/custom_registry.py
+```
+
+The adapter will automatically load and merge your custom registry with the default registry. This is useful for:
+- Development environments with custom models
+- Production deployments with organization-specific configurations
+- Testing different registry configurations without code changes
+
+##### Method 2: Programmatic Configuration
+
 ```python
 from llm_adapter.model_registry import REGISTRY as DEFAULT_REGISTRY
 from custom_registry import REGISTRY as CUSTOM_REGISTRY
