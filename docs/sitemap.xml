@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Main documentation index -->
+  <url>
+    <loc>https://vrraj.github.io/llm-adapter/</loc>
+    <lastmod>2026-03-11</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  
+  <!-- Model Registry Documentation -->
+  <url>
+    <loc>https://vrraj.github.io/llm-adapter/model-registry.html</loc>
+    <lastmod>2026-03-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  
+  <!-- API Reference -->
+  <url>
+    <loc>https://vrraj.github.io/llm-adapter/api-reference.html</loc>
+    <lastmod>2026-03-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- Development Guide -->
+  <url>
+    <loc>https://vrraj.github.io/llm-adapter/development.html</loc>
+    <lastmod>2026-03-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+</urlset>
