@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vrraj-llm-adapter"
-version = "1.0.3"
+version = "1.0.4"
 description = "Standalone llm adapter/routing layer with a demo UI for testing provider connections and call and output signature comparison."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
