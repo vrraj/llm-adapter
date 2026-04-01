@@ -66,7 +66,7 @@ fi
 
 echo ""
 echo "[3/3] Installing llm-adapter in editable mode ..."
-pip install -e .
+pip install -e ".[server]"
 
 echo ""
 echo "✅ Setup complete for llm-adapter. NEXT STEPS:"
