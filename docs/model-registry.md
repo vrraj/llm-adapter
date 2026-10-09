@@ -32,6 +32,12 @@ Here are the default registry keys included with the package:
 - `gemini:native-sdk-reasoning-2.5-flash` - Budget-based reasoning (Native SDK)
 - `gemini:native-embed` - Embeddings (Native SDK)
 
+#### NVIDIA Models
+- `nvidia:nemotron-3-super-120b` - Text generation (OpenAI-compatible NIM endpoint)
+- `nvidia:nemotron-nano-30b` - Text generation, lightweight (OpenAI-compatible NIM endpoint)
+- `nvidia:nemotron-super-49b` - Text generation (OpenAI-compatible NIM endpoint)
+- `nvidia:nemotron-3.5-lightning-30b` - Budget-based reasoning via `reasoning_budget` (OpenAI-compatible NIM endpoint)
+
 ### For Installed Packages (pip install users)
 
 After installing via pip, you can discover all available registry keys programmatically:
@@ -274,25 +280,78 @@ ModelInfo(
 )
 ```
 
+### NVIDIA Models
+
+#### Text Generation (OpenAI-Compatible NIM)
+```python
+"nvidia:nemotron-3-super-120b": ModelInfo(
+    provider="nvidia",
+    model="nvidia/nemotron-3-super-120b-a12b",
+    endpoint="chat_completions",
+    pricing=Pricing(input_per_mm=0.10, output_per_mm=0.50),
+    limits={"max_output_tokens": 2000},
+    param_policy={
+        "allowed": {"max_output_tokens", "temperature", "top_p", "tools", "tool_choice"},
+        "disabled": {"reasoning_effort", "stream", "include_thoughts"}
+    },
+    capabilities={"assistant_role": "assistant"},
+)
+```
+
+#### Reasoning Models (Budget-Based)
+```python
+"nvidia:nemotron-3.5-lightning-30b": ModelInfo(
+    provider="nvidia",
+    model="nvidia/nemotron-3.5-lightning-30b-a3b",
+    endpoint="chat_completions",
+    pricing=None,  # Not yet published per-token; update when available
+    limits={"max_output_tokens": 2000},
+    param_policy={
+        "allowed": {"max_output_tokens", "reasoning_effort", "include_reasoning", "temperature", "top_p", "tools", "tool_choice"},
+        "disabled": set()
+    },
+    reasoning_policy={
+        "mode": "nvidia_budget",
+        "param": "reasoning_budget",
+        "default": "low",
+        "budget_map": {
+            "none": 0,
+            "minimal": 1024,
+            "low": 2048,
+            "medium": 4096,
+            "high": 8192,
+        },
+        "counts_against_output": True,
+    },
+    reasoning_parameter=("reasoning_budget", 2048),
+    capabilities={"assistant_role": "assistant"},
+)
+```
+
+The `nvidia_budget` reasoning mode maps the public `reasoning_effort` knob to NVIDIA NIM's
+`extra_body={"chat_template_kwargs": {"enable_thinking": true}, "reasoning_budget": N}` parameters.
+Responses surface thoughts in `message.reasoning_content`, which the adapter collapses into
+the normalized `reasoning` field.
+
 ## Field Explanations
 
 ### Core Fields
 
 | Field | Purpose | Values |
 |-------|---------|--------|
-| `provider` | LLM provider | `"openai"`, `"gemini"` |
-| `model` | Provider-native model name | `"gpt-4o-mini"`, `"models/gemini-3-flash-preview"` |
+| `provider` | LLM provider | `"openai"`, `"gemini"`, `"nvidia"` |
+| `model` | Provider-native model name | `"gpt-4o-mini"`, `"models/gemini-3-flash-preview"`, `"nvidia/nemotron-3-super-120b-a12b"` |
 | `endpoint` | API endpoint type | `"responses"`, `"chat_completions"`, `"embeddings"`, `"gemini_sdk"`, `"embed_content"` |
 
 ### Endpoint Types
 
-| Endpoint | OpenAI | Gemini | Description |
-|----------|--------|--------|-------------|
-| `responses` | OpenAI Responses API | | New OpenAI API with built-in reasoning |
-| `chat_completions` | Chat Completions API | OpenAI-compatible endpoint | Standard chat API |
-| `embeddings` | Embeddings API | OpenAI-compatible embeddings | Standard embeddings |
-| `gemini_sdk` | | Native SDK | Gemini native generation |
-| `embed_content` | | Native SDK | Gemini native embeddings |
+| Endpoint | OpenAI | Gemini | NVIDIA | Description |
+|----------|--------|--------|--------|-------------|
+| `responses` | OpenAI Responses API | | | New OpenAI API with built-in reasoning |
+| `chat_completions` | Chat Completions API | OpenAI-compatible endpoint | OpenAI-compatible NIM endpoint | Standard chat API |
+| `embeddings` | Embeddings API | OpenAI-compatible embeddings | | Standard embeddings |
+| `gemini_sdk` | | Native SDK | | Gemini native generation |
+| `embed_content` | | Native SDK | | Gemini native embeddings |
 
 ### Configuration Fields
 
@@ -374,6 +433,15 @@ reasoning_policy={
     "param": "thinking_budget",
     "default": "low",
     "budget_map": {"low": 1000, "medium": 2000},  # Exact thinking token counts
+    "counts_against_output": True
+}
+
+# NVIDIA budget-based reasoning (maps to NIM reasoning_budget + enable_thinking)
+reasoning_policy={
+    "mode": "nvidia_budget",
+    "param": "reasoning_budget",
+    "default": "low",
+    "budget_map": {"none": 0, "low": 2048, "medium": 4096},  # Reasoning token budgets
     "counts_against_output": True
 }
 ```

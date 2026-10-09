@@ -10,7 +10,7 @@
 
 Provider-agnostic LLM adapter for **text generation + embeddings** with a **registry-driven routing layer** (capabilities, param policies, pricing metadata, access control), plus **normalized outputs** (text, tool calls, reasoning, usage).
 
-Currently supports OpenAI and Gemini (extensible architecture for additional providers).
+Currently supports OpenAI, Gemini, and NVIDIA NIM/Nemotron (extensible architecture for additional providers).
 
 - **PyPI:** https://pypi.org/project/vrraj-llm-adapter
 - **GitHub:** https://github.com/vrraj/llm-adapter
@@ -41,7 +41,7 @@ pip install vrraj-llm-adapter
 
 ## Quickstart
 
-> **Requires API keys:** `OPENAI_API_KEY` and/or `GEMINI_API_KEY`
+> **Requires API keys:** `OPENAI_API_KEY` and/or `GEMINI_API_KEY` and/or `NVIDIA_API_KEY`
 > 
 > **Setup:** Copy `.env.example` to `.env` and configure your API keys
 
@@ -584,11 +584,15 @@ Supported env vars:
 - **OpenAI-only**: `OPENAI_API_KEY`
 - **Gemini native SDK**: `GEMINI_API_KEY`
 - **Gemini OpenAI-compatible**: `GEMINI_API_KEY` + `GEMINI_OPENAI_BASE_URL`
+- **NVIDIA NIM (hosted)**: `NVIDIA_API_KEY`
+- **NVIDIA NIM (self-hosted)**: `NVIDIA_API_KEY` + `NVIDIA_BASE_URL`
 
 **All supported variables:**
 - `OPENAI_API_KEY`
 - `GEMINI_API_KEY`
 - `GEMINI_OPENAI_BASE_URL`
+- `NVIDIA_API_KEY`
+- `NVIDIA_BASE_URL` (optional; defaults to `https://integrate.api.nvidia.com/v1`)
 - `LLM_ADAPTER_ALLOWED_MODELS` (comma-separated list) - Restrict which models can be used in each environment.
 
 ## Model Allowlist

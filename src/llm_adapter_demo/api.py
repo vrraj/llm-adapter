@@ -27,6 +27,12 @@ def _ensure_handler_has_api_key(provider: str) -> None:
                 llm_adapter._gemini = None
             if hasattr(llm_adapter, "_gemini_native"):
                 llm_adapter._gemini_native = None
+    if provider == "nvidia":
+        env_key = os.getenv("NVIDIA_API_KEY")
+        if env_key and not getattr(llm_adapter, "nvidia_api_key", None):
+            llm_adapter.nvidia_api_key = env_key
+            if hasattr(llm_adapter, "_nvidia"):
+                llm_adapter._nvidia = None
 
 
 def _get_adapter(merge_custom_registry: bool = False) -> LLMAdapter:
@@ -57,6 +63,8 @@ def _get_adapter(merge_custom_registry: bool = False) -> LLMAdapter:
             custom_adapter.openai_api_key = llm_adapter.openai_api_key
         if hasattr(llm_adapter, 'gemini_api_key'):
             custom_adapter.gemini_api_key = llm_adapter.gemini_api_key
+        if hasattr(llm_adapter, 'nvidia_api_key'):
+            custom_adapter.nvidia_api_key = llm_adapter.nvidia_api_key
         
         return custom_adapter
     except Exception as e:

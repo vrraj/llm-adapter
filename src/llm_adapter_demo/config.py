@@ -72,4 +72,6 @@ def is_provider_enabled(provider: str) -> bool:
         return bool(os.getenv("OPENAI_API_KEY"))
     if provider == "gemini":
         return bool(os.getenv("GEMINI_API_KEY"))
+    if provider == "nvidia":
+        return bool(os.getenv("NVIDIA_API_KEY"))
     return False
