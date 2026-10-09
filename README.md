@@ -450,7 +450,7 @@ except LLMError as e:
 
 ## Development And Demo UI
 
-Do this to run the **demo UI** (runs on port 8100) or **customize** the code.
+Do this to run the **demo UI** (runs on port 7100) or **customize** the code.
 
 1. Clone the repository and run the setup script.
 
@@ -474,7 +474,7 @@ make start
 
 4. Open the demo UI:
 
-- http://localhost:8100/ui/
+- http://localhost:7100/ui/
 
 
 ### Manual start (optional)
@@ -482,13 +482,13 @@ make start
 If you prefer not to use the Makefile helpers, you can start the FastAPI server directly:
 
 ```bash
-uvicorn llm_adapter_demo.api:app --reload --port 8100
+uvicorn llm_adapter_demo.api:app --reload --port 7100
 ```
 
 The Interactive Playground will be available at:
 
 ```
-http://localhost:8100/ui/
+http://localhost:7100/ui/
 ```
 
 ### For Developers: Running Tests

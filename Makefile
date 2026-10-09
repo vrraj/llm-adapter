@@ -6,7 +6,7 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python
 LOG_DIR := logs
 LOG_FILE := $(LOG_DIR)/llm_adapter_demo.log
-PORT := 8100
+PORT := 7100
 
 help:
 	@echo "Available targets:"

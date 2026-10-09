@@ -122,10 +122,10 @@ The LLM Adapter includes an **interactive demo UI** that allows you to test cust
    ```bash
    cd llm-adapter
    source .venv/bin/activate  # or activate your venv
-   uvicorn llm_adapter_demo.api:app --reload --host 0.0.0.0 --port 8100
+   uvicorn llm_adapter_demo.api:app --reload --host 0.0.0.0 --port 7100
    ```
 
-2. **Open the UI:** Navigate to `http://localhost:8100/ui`
+2. **Open the UI:** Navigate to `http://localhost:7100/ui`
 
 3. **Enable custom registry:** Check the "Merge custom registry (examples/custom_registry.py)" checkbox
 

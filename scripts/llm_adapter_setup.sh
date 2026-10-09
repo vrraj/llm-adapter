@@ -80,6 +80,6 @@ echo "  2) START the FastAPI demo (foreground):"
 echo "     - make start"
 echo "     - or background service: make start-bg"
 echo ""
-echo "  3) Open the DEMO UI: http://localhost:8100/ui/"
+echo "  3) Open the DEMO UI: http://localhost:7100/ui/"
 
 
