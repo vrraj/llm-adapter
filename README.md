@@ -270,9 +270,13 @@ except LLMError as e:
     print(f"Error: {e.code} - {e}")
 ```
 
-### NVIDIA NIM (Nemotron & DeepSeek)
+### NVIDIA NIM — Hosted and Self-Hosted Inference
 
-NVIDIA models are served through NIM's OpenAI-compatible endpoint (`https://integrate.api.nvidia.com/v1`). Set `NVIDIA_API_KEY` (and optionally `NVIDIA_BASE_URL` for a self-hosted NIM container), then use the registry keys:
+The adapter supports **NVIDIA-hosted NIM APIs** (`https://integrate.api.nvidia.com/v1`) and **configurable self-hosted NIM endpoints** through an OpenAI-compatible interface — the same interface NVIDIA documents for both hosted and self-deployed NIM services. Model routing, parameter handling, and response normalization are managed by the adapter. Self-hosted compatibility depends on the deployed model and endpoint configuration.
+
+No local NIM deployment is required: get an API key from [build.nvidia.com](https://build.nvidia.com), set `NVIDIA_API_KEY`, and use the registry keys. To target a self-hosted NIM microservice instead, set `NVIDIA_BASE_URL` to your deployment's endpoint — the same registry keys apply.
+
+> **Validation note:** hosted NIM models are live-tested; self-hosted NIM is architecturally supported via `NVIDIA_BASE_URL` but has not been validated against a specific self-hosted deployment.
 
 | Registry key | Model | Reasoning |
 |---|---|---|
@@ -282,7 +286,9 @@ NVIDIA models are served through NIM's OpenAI-compatible endpoint (`https://inte
 | `nvidia:nemotron-3.5-lightning-30b` | Nemotron 3.5 Lightning 30B | budget-based |
 | `nvidia:deepseek-v4.1-flash` | DeepSeek V4.1 Flash | thinking toggle |
 
-These hosted models **think by default**. The adapter maps the standard `reasoning_effort` knob (none / minimal / low / medium / high) to NIM's `enable_thinking` and `reasoning_budget` parameters — pass `"none"` to disable thinking:
+These hosted models **think by default**. The adapter maps the standard `reasoning_effort` knob (none / minimal / low / medium / high) to NIM's `enable_thinking` and `reasoning_budget` parameters — pass `"none"` to disable thinking.
+
+Usage reporting varies by NIM model: some models (e.g. `nemotron-3-ultra-550b`) do not populate `usage.completion_tokens_details`, so `reasoning_tokens` may be `0` even when reasoning occurred — reasoning tokens are still billed inside `output_tokens` in that case.
 
 ```python
 from llm_adapter import llm_adapter, LLMError
@@ -622,8 +628,8 @@ Supported env vars:
 - **OpenAI-only**: `OPENAI_API_KEY`
 - **Gemini native SDK**: `GEMINI_API_KEY`
 - **Gemini OpenAI-compatible**: `GEMINI_API_KEY` + `GEMINI_OPENAI_BASE_URL`
-- **NVIDIA NIM (hosted)**: `NVIDIA_API_KEY`
-- **NVIDIA NIM (self-hosted)**: `NVIDIA_API_KEY` + `NVIDIA_BASE_URL`
+- **NVIDIA NIM (hosted API)**: `NVIDIA_API_KEY`
+- **NVIDIA NIM (self-hosted endpoint)**: `NVIDIA_API_KEY` + `NVIDIA_BASE_URL`
 
 **All supported variables:**
 - `OPENAI_API_KEY`
