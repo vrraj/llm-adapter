@@ -1,5 +1,45 @@
 # Release Notes
 
+## Version 1.1.0 — NVIDIA NIM (Nemotron & DeepSeek) Provider
+
+### Overview
+
+Adds **NVIDIA** as a third provider alongside OpenAI and Gemini, served through NIM's OpenAI-compatible endpoint — no new SDK dependency. Fully backward compatible; OpenAI and Gemini behavior is unchanged.
+
+### New Provider: NVIDIA NIM
+
+- New `nvidia` provider via `https://integrate.api.nvidia.com/v1` (OpenAI-compatible)
+- `nvidia_api_key` / `nvidia_base_url` / `nvidia_client` constructor params with `NVIDIA_API_KEY` / `NVIDIA_BASE_URL` environment fallbacks
+- `NVIDIA_BASE_URL` override supports self-hosted NIM containers
+- Registry models (all verified against the hosted API):
+  - `nvidia:nemotron-3-super-120b` — hybrid reasoning, budget-based
+  - `nvidia:nemotron-3-ultra-550b` — hybrid reasoning, thinking toggle
+  - `nvidia:nemotron-3-nano-omni-30b` — lightweight reasoning
+  - `nvidia:nemotron-3.5-lightning-30b` — budget-based reasoning
+  - `nvidia:deepseek-v4.1-flash` — DeepSeek V4.1 Flash, thinking toggle
+
+### Reasoning Support
+
+- Standard `reasoning_effort` knob (none / minimal / low / medium / high) mapped to NIM's `chat_template_kwargs.enable_thinking` and `reasoning_budget` parameters
+- Two registry reasoning modes: `nvidia_budget` (token budgets) and `nvidia_toggle` (for model runners that reject budget parameters)
+- NVIDIA hosted reasoning models think by default; `reasoning_effort="none"` disables thinking
+- Response `reasoning_content` is surfaced as the normalized `reasoning` field in `LLMResult`
+
+### Demo UI
+
+- NVIDIA models appear in the Interactive Playground dropdown; provider enablement follows `NVIDIA_API_KEY`
+- Demo server port moved from 8100 to 7100
+- `make start` now runs the server in the background, waits for readiness, and prints the UI URL; foreground mode moved to `make fg`
+
+### Compatibility
+
+- Python 3.10+
+- OpenAI, Gemini, and NVIDIA supported
+- Custom registry extensions supported (NVIDIA models flow into merged registries automatically)
+- Stable 1.x API contract maintained
+
+---
+
 ## Version 1.0.0 — Initial Public Release
 
 ### Overview
