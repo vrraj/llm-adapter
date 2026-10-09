@@ -161,16 +161,21 @@ class LLMAdapter:
         *,
         openai_api_key: Optional[str] = None,
         gemini_api_key: Optional[str] = None,
+        nvidia_api_key: Optional[str] = None,
         openai_base_url: Optional[str] = None,
         gemini_base_url: Optional[str] = None,
+        nvidia_base_url: Optional[str] = None,
         model_registry: Optional[Dict[str, Any]] = None,
         openai_client: Any = None,
         gemini_client: Any = None,
+        nvidia_client: Any = None,
     ):
         self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         self.gemini_api_key = gemini_api_key or os.getenv("GEMINI_API_KEY")
+        self.nvidia_api_key = nvidia_api_key or os.getenv("NVIDIA_API_KEY")
         self.openai_base_url = openai_base_url or os.getenv("OPENAI_BASE_URL")
         self.gemini_base_url = gemini_base_url or os.getenv("GEMINI_OPENAI_BASE_URL")
+        self.nvidia_base_url = nvidia_base_url or os.getenv("NVIDIA_BASE_URL")
 
         # Registry dict:
         # - Defaults come from package registry (`llm_adapter.model_registry.REGISTRY`).
@@ -196,6 +201,7 @@ class LLMAdapter:
         # Optional injected clients (mirrors chat-with-rag handler ctor)
         self._openai = openai_client
         self._gemini = gemini_client
+        self._nvidia = nvidia_client
         self._gemini_native = None
         self.metadata_hook: Optional[Callable[[Dict[str, Any], Any], Dict[str, Any]]] = None
         self.responses = _ResponsesFacade(self)
@@ -530,6 +536,21 @@ class LLMAdapter:
         base_url = self.gemini_base_url or "https://generativelanguage.googleapis.com/v1beta/openai/"
         self._gemini = OpenAI(api_key=self.gemini_api_key, base_url=base_url)
         return self._gemini
+
+    def _get_nvidia(self) -> OpenAI:
+        """Get NVIDIA NIM client via OpenAI-compatible interface."""
+        if self._nvidia is not None:
+            return self._nvidia
+        if not self.nvidia_api_key:
+            raise LLMError(
+                provider="nvidia",
+                kind="config",
+                code="missing_api_key",
+                message="NVIDIA API key not provided",
+            )
+        base_url = self.nvidia_base_url or "https://integrate.api.nvidia.com/v1"
+        self._nvidia = OpenAI(api_key=self.nvidia_api_key, base_url=base_url)
+        return self._nvidia
 
     def _get_gemini_native(self):
         if self._gemini_native is None:
@@ -1500,6 +1521,83 @@ class LLMAdapter:
         out[p_name] = int(budget_i)
         return out
 
+    def _apply_nvidia_reasoning_policy(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(kwargs, dict):
+            return kwargs
+
+        model_info = self._lookup_model_info_from_registry(model)
+        if model_info is None or getattr(model_info, "provider", None) != "nvidia":
+            return kwargs
+
+        policy = self._get_model_reasoning_policy(model)
+        if not isinstance(policy, dict) or not policy:
+            return kwargs
+
+        mode = str(policy.get("mode") or "").strip().lower()
+        if mode not in ("nvidia_budget", "nvidia_toggle"):
+            return kwargs
+
+        out = dict(kwargs)
+
+        # Determine canonical requested effort (public knob).
+        effort = out.pop("reasoning_effort", None)
+        if effort is None:
+            effort = policy.get("default")
+        effort_name = self._normalize_effort_name(effort)
+
+        # NVIDIA NIM reasoning models take non-standard params via extra_body:
+        #   chat_template_kwargs: {"enable_thinking": bool}   (toggle thinking)
+        #   reasoning_budget: <int>                             (token budget for thoughts, budget models only)
+        enable_thinking = effort_name != "none"
+
+        budget_i = 0
+        if mode == "nvidia_budget":
+            budget_map = policy.get("budget_map") if isinstance(policy.get("budget_map"), dict) else {}
+            budget = budget_map.get(effort_name)
+            if budget is None:
+                budget = budget_map.get("low", budget_map.get("medium", 0))
+            try:
+                budget_i = int(budget)
+            except Exception:
+                budget_i = 0
+            if budget_i < 0:
+                budget_i = 0
+
+            if enable_thinking:
+                # Clamp budget so it cannot consume the entire output cap.
+                base_max = out.get("max_output_tokens")
+                base_max_i = None
+                try:
+                    if base_max is not None:
+                        base_max_i = int(base_max)
+                except Exception:
+                    base_max_i = None
+                if base_max_i is not None and base_max_i > 0:
+                    # Keep at least 100 tokens for visible answer.
+                    cap = max(base_max_i - 100, 0)
+                    budget_i = min(budget_i, cap)
+            else:
+                budget_i = 0
+
+        # Merge into caller's extra_body without clobbering unrelated keys.
+        extra_body = out.get("extra_body")
+        if not isinstance(extra_body, dict):
+            extra_body = {}
+        extra_body = dict(extra_body)
+
+        ctk = extra_body.get("chat_template_kwargs")
+        if not isinstance(ctk, dict):
+            ctk = {}
+        ctk = dict(ctk)
+        ctk["enable_thinking"] = enable_thinking
+        extra_body["chat_template_kwargs"] = ctk
+
+        if mode == "nvidia_budget" and enable_thinking and budget_i > 0:
+            extra_body["reasoning_budget"] = int(budget_i)
+
+        out["extra_body"] = extra_body
+        return out
+
     def _apply_registry_param_policy(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         capabilities = self._get_model_capabilities(model)
         if not isinstance(kwargs, dict) or not kwargs:
@@ -1771,6 +1869,11 @@ class LLMAdapter:
 
         return prepared_kwargs
 
+    def _prepare_nvidia_adapter_kwargs(self, model: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        filtered_kwargs = self._apply_registry_param_policy(model, kwargs)
+        prepared_kwargs = self._apply_nvidia_reasoning_policy(model, filtered_kwargs)
+        return prepared_kwargs
+
     def _sanitize_tools_for_gemini_adapter(self, tools: Any) -> Any:
         """Return a Gemini-friendly tools list.
 
@@ -1887,6 +1990,80 @@ class LLMAdapter:
             tool_calls=tool_calls,
         )
 
+    def _wrap_nvidia_chatcompletion_as_responses(self, resp: Any, *, model_key: str, resolved_model: str) -> AdapterResponse:
+        """Wrap an NVIDIA NIM (OpenAI-compatible) chat.completions response into a minimal Responses-like shape.
+
+        This mirrors the compatibility behavior of the Gemini wrapper, so callers can rely on:
+        - AdapterResponse.output_text
+        - AdapterResponse.output (Responses-style message/content)
+        - AdapterResponse.usage (best-effort)
+        - AdapterResponse.model_response (provider-native response)
+        """
+
+        # Best-effort text extraction from chat.completions shape
+        text = ""
+        reasoning_text = ""
+        try:
+            choices = self._safe_get(resp, "choices")
+            if isinstance(choices, list) and choices:
+                c0 = choices[0]
+                msg = self._safe_get(c0, "message")
+                content = self._safe_get(msg, "content")
+                if isinstance(content, str):
+                    text = content
+                # NVIDIA reasoning models surface thoughts in message.reasoning_content.
+                rc = self._safe_get(msg, "reasoning_content")
+                if isinstance(rc, str):
+                    reasoning_text = rc
+        except Exception:
+            text = ""
+
+        # Collapse thoughts into the adapter's <thought> convention so
+        # normalize_adapter_response() splits reasoning and answer.
+        if reasoning_text.strip():
+            output_text = f"<thought>\n{reasoning_text.strip()}\n</thought>\n\n{text or ''}".strip()
+        else:
+            output_text = text or ""
+
+        # Best-effort tool call extraction from chat.completions message.tool_calls
+        tool_calls = self._extract_chatcompletion_tool_calls(resp)
+
+        # Build a minimal Responses-style output list
+        output_list: list[Dict[str, Any]] = [
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "text", "text": text or ""}],
+            }
+        ]
+        if tool_calls:
+            # Keep tool calls as additional content items
+            output_list[0]["content"].extend(tool_calls)
+
+        # Best-effort usage mapping to Responses-style keys (OpenAI-shaped usage)
+        usage_dict = self._extract_gemini_response_usage(resp, self.ENDPOINT_CHAT_COMPLETIONS)
+        metadata_dict = self._assemble_adapter_response_metadata(
+            provider="nvidia",
+            model_key=model_key,
+            resolved_model=resolved_model,
+            endpoint=self.ENDPOINT_CHAT_COMPLETIONS,
+            raw_response=resp,
+        )
+
+        # Wrap as AdapterResponse (Responses-like shim)
+        finish_reason = self._extract_finish_reason(resp)
+        return AdapterResponse(
+            output_text=output_text,
+            model=resolved_model,
+            usage=usage_dict,
+            metadata=metadata_dict,
+            adapter_response={"output": output_list},
+            model_response=resp,
+            status=self._map_completion_status_from_finish_reason(finish_reason),
+            finish_reason=finish_reason,
+            tool_calls=tool_calls,
+        )
+
     def create(
         self,
         *,
@@ -1974,6 +2151,9 @@ class LLMAdapter:
             return self._openai_call(model=model, input=input, stream=stream, **kwargs)
         if provider == "gemini":
             return self._gemini_call(model=model, input=input, stream=stream, **kwargs)
+        if provider == "nvidia":
+            kwargs.pop("__model_spec", None)
+            return self._nvidia_call(model=model, input=input, stream=stream, **kwargs)
 
         raise LLMError(
             provider=str(provider or "unknown"),
@@ -2603,6 +2783,42 @@ class LLMAdapter:
                 return self._wrap_gemini_chatcompletion_as_responses(resp, model_key=model, resolved_model=resolved_model)
 
             return resp
+
+    def _nvidia_call(self, *, model: str, input: Any, stream: bool, **kwargs: Any):
+        client = self._get_nvidia()
+        resolved_model = self._resolve_provider_model_name(model)
+        working_kwargs = self._prepare_nvidia_adapter_kwargs(model, kwargs)
+
+        # Extract canonical output token budget (create() writes max_output_tokens).
+        mot = working_kwargs.pop("max_output_tokens", None)
+
+        if "tools" in working_kwargs:
+            try:
+                working_kwargs["tools"] = self._sanitize_tools_for_gemini_adapter(working_kwargs["tools"])
+            except Exception:
+                pass
+
+        if mot is not None:
+            # NVIDIA NIM chat.completions uses the OpenAI `max_tokens` field.
+            try:
+                working_kwargs["max_tokens"] = int(mot)
+            except Exception:
+                working_kwargs["max_tokens"] = mot
+
+        messages = input if isinstance(input, list) else [{"role": "user", "content": str(input)}]
+        resp = client.chat.completions.create(
+            model=resolved_model,
+            messages=messages,
+            stream=stream,
+            **working_kwargs,
+        )
+
+        # For non-streaming calls, wrap NIM chat.completions into a minimal Responses-like shim
+        # so callers can consistently access output_text/output/usage across providers.
+        if not stream:
+            return self._wrap_nvidia_chatcompletion_as_responses(resp, model_key=model, resolved_model=resolved_model)
+
+        return resp
 
     def _gemini_embedding_call(self, *, model: str, input: Any, **kwargs: Any):
         """Gemini embedding call via the OpenAI-compatible adapter client."""

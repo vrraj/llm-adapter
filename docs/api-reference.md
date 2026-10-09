@@ -30,22 +30,28 @@ class LLMAdapter:
         *,
         openai_api_key: Optional[str] = None,
         gemini_api_key: Optional[str] = None,
+        nvidia_api_key: Optional[str] = None,
         openai_base_url: Optional[str] = None,
         gemini_base_url: Optional[str] = None,
+        nvidia_base_url: Optional[str] = None,
         model_registry: Optional[Dict[str, Any]] = None,
         openai_client: Any = None,
         gemini_client: Any = None,
+        nvidia_client: Any = None,
     )
 ```
 
 **Parameters:**
 - `openai_api_key`: OpenAI API key (defaults to `OPENAI_API_KEY` env var)
 - `gemini_api_key`: Gemini API key (defaults to `GEMINI_API_KEY` env var)
+- `nvidia_api_key`: NVIDIA NIM API key (defaults to `NVIDIA_API_KEY` env var)
 - `openai_base_url`: OpenAI base URL (defaults to `OPENAI_BASE_URL` env var)
 - `gemini_base_url`: Gemini base URL (defaults to `GEMINI_OPENAI_BASE_URL` env var)
+- `nvidia_base_url`: NVIDIA NIM base URL (defaults to `NVIDIA_BASE_URL` env var; falls back to `https://integrate.api.nvidia.com/v1`)
 - `model_registry`: Custom model registry to override/extend defaults
 - `openai_client`: Pre-configured OpenAI client (for dependency injection)
 - `gemini_client`: Pre-configured Gemini client (for dependency injection)
+- `nvidia_client`: Pre-configured NVIDIA NIM client (for dependency injection)
 
 ### `ModelSpec`
 

@@ -10,7 +10,7 @@
 
 Provider-agnostic LLM adapter for **text generation + embeddings** with a **registry-driven routing layer** (capabilities, param policies, pricing metadata, access control), plus **normalized outputs** (text, tool calls, reasoning, usage).
 
-Currently supports OpenAI and Gemini (extensible architecture for additional providers).
+Currently supports OpenAI, Gemini, and NVIDIA NIM/Nemotron (extensible architecture for additional providers).
 
 - **PyPI:** https://pypi.org/project/vrraj-llm-adapter
 - **GitHub:** https://github.com/vrraj/llm-adapter
@@ -41,7 +41,7 @@ pip install vrraj-llm-adapter
 
 ## Quickstart
 
-> **Requires API keys:** `OPENAI_API_KEY` and/or `GEMINI_API_KEY`
+> **Requires API keys:** `OPENAI_API_KEY` and/or `GEMINI_API_KEY` and/or `NVIDIA_API_KEY`
 > 
 > **Setup:** Copy `.env.example` to `.env` and configure your API keys
 
@@ -234,6 +234,7 @@ This pattern keeps the library surface minimal while allowing your application t
 **Provider-Specific Examples:**
 -  openai_embedding_example.py - OpenAI embeddings
 -  openai_adapter_example.py - OpenAI chat
+-  nvidia_nemotron_example.py - NVIDIA NIM chat (Nemotron & DeepSeek)
 -  streaming_call_example.py - Streaming responses
 
 **Advanced Examples:**
@@ -246,7 +247,7 @@ This pattern keeps the library surface minimal while allowing your application t
 
 ### Accessing Reasoning Content
 
-Some models (like Gemini) return reasoning content separately.
+Some models (like Gemini and NVIDIA Nemotron) return reasoning content separately.
 
 ```python
 from llm_adapter import llm_adapter, LLMError
@@ -256,6 +257,41 @@ try:
         model="gemini:native-sdk-reasoning-2.5-flash",
         input="Explain why the sky is blue",
         reasoning_effort="high",   # adapter-level reasoning knob
+        max_output_tokens=1000
+    )
+
+    normalized_response = llm_adapter.normalize_adapter_response(response)
+
+    if normalized_response.get('reasoning'):
+        print(f"Reasoning: {normalized_response['reasoning']}")
+
+    print(normalized_response['text'])
+except LLMError as e:
+    print(f"Error: {e.code} - {e}")
+```
+
+### NVIDIA NIM (Nemotron & DeepSeek)
+
+NVIDIA models are served through NIM's OpenAI-compatible endpoint (`https://integrate.api.nvidia.com/v1`). Set `NVIDIA_API_KEY` (and optionally `NVIDIA_BASE_URL` for a self-hosted NIM container), then use the registry keys:
+
+| Registry key | Model | Reasoning |
+|---|---|---|
+| `nvidia:nemotron-3-super-120b` | Nemotron 3 Super 120B | budget-based (`reasoning_budget`) |
+| `nvidia:nemotron-3-ultra-550b` | Nemotron 3 Ultra 550B | thinking toggle |
+| `nvidia:nemotron-3-nano-omni-30b` | Nemotron 3 Nano Omni 30B | budget-based |
+| `nvidia:nemotron-3.5-lightning-30b` | Nemotron 3.5 Lightning 30B | budget-based |
+| `nvidia:deepseek-v4.1-flash` | DeepSeek V4.1 Flash | thinking toggle |
+
+These hosted models **think by default**. The adapter maps the standard `reasoning_effort` knob (none / minimal / low / medium / high) to NIM's `enable_thinking` and `reasoning_budget` parameters — pass `"none"` to disable thinking:
+
+```python
+from llm_adapter import llm_adapter, LLMError
+
+try:
+    response = llm_adapter.create(
+        model="nvidia:nemotron-3.5-lightning-30b",
+        input="Which number is larger: 9.11 or 9.8?",
+        reasoning_effort="medium",  # none / minimal / low / medium / high
         max_output_tokens=1000
     )
 
@@ -450,7 +486,7 @@ except LLMError as e:
 
 ## Development And Demo UI
 
-Do this to run the **demo UI** (runs on port 8100) or **customize** the code.
+Do this to run the **demo UI** (runs on port 7100) or **customize** the code.
 
 1. Clone the repository and run the setup script.
 
@@ -470,11 +506,13 @@ bash scripts/llm_adapter_setup.sh
 make start
 ```
 
->**Note:** Run `make start` to run in foreground or `make start-bg` to run in background. Use `make stop` to stop the server.
+This runs the server in the background, waits until it is ready, and prints the UI URL
+(default: http://localhost:7100/ui/). Use `make fg` to run in the foreground instead,
+`make logs` to follow server logs, and `make stop` to stop the server.
 
 4. Open the demo UI:
 
-- http://localhost:8100/ui/
+- http://localhost:7100/ui/
 
 
 ### Manual start (optional)
@@ -482,13 +520,13 @@ make start
 If you prefer not to use the Makefile helpers, you can start the FastAPI server directly:
 
 ```bash
-uvicorn llm_adapter_demo.api:app --reload --port 8100
+uvicorn llm_adapter_demo.api:app --reload --port 7100
 ```
 
 The Interactive Playground will be available at:
 
 ```
-http://localhost:8100/ui/
+http://localhost:7100/ui/
 ```
 
 ### For Developers: Running Tests
@@ -584,11 +622,15 @@ Supported env vars:
 - **OpenAI-only**: `OPENAI_API_KEY`
 - **Gemini native SDK**: `GEMINI_API_KEY`
 - **Gemini OpenAI-compatible**: `GEMINI_API_KEY` + `GEMINI_OPENAI_BASE_URL`
+- **NVIDIA NIM (hosted)**: `NVIDIA_API_KEY`
+- **NVIDIA NIM (self-hosted)**: `NVIDIA_API_KEY` + `NVIDIA_BASE_URL`
 
 **All supported variables:**
 - `OPENAI_API_KEY`
 - `GEMINI_API_KEY`
 - `GEMINI_OPENAI_BASE_URL`
+- `NVIDIA_API_KEY`
+- `NVIDIA_BASE_URL` (optional; defaults to `https://integrate.api.nvidia.com/v1`)
 - `LLM_ADAPTER_ALLOWED_MODELS` (comma-separated list) - Restrict which models can be used in each environment.
 
 ## Model Allowlist

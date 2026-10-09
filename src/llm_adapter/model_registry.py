@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple, Literal
 
-Provider = Literal["openai", "gemini"]
+Provider = Literal["openai", "gemini", "nvidia"]
 Endpoint = Literal["responses", "chat_completions", "embeddings", "gemini_sdk", "embed_content"]
 
 
@@ -391,6 +391,175 @@ REGISTRY: Dict[str, ModelInfo] = {
             "kind": "budget",
         },
     ),
+    "nvidia:nemotron-3-super-120b": ModelInfo(
+        provider="nvidia",
+        model="nvidia/nemotron-3-super-120b-a12b",
+        endpoint="chat_completions",
+        pricing=Pricing(input_per_mm=0.10, output_per_mm=0.50),
+        limits={
+            "max_output_tokens": 2000
+        },
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_reasoning", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
+        reasoning_policy={
+            "mode": "nvidia_budget",
+            "param": "reasoning_budget",
+            "default": "low",
+            "budget_map": {
+                "none": 0,
+                "minimal": 1024,
+                "low": 2048,
+                "medium": 4096,
+                "high": 8192,
+            },
+            "counts_against_output": True,
+        },
+        reasoning_parameter=("reasoning_budget", 2048),
+        thinking_tax={
+            "effort_map": {
+                "none": {"reserve_ratio": 0.0},
+                "minimal": {"reserve_ratio": 0.25},
+                "low": {"reserve_ratio": 0.30},
+                "medium": {"reserve_ratio": 0.50},
+                "high": {"reserve_ratio": 0.80},
+            },
+            "kind": "budget",
+        },
+        capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
+        },
+    ),
+    "nvidia:nemotron-3-ultra-550b": ModelInfo(
+        provider="nvidia",
+        model="nvidia/nemotron-3-ultra-550b-a55b",
+        endpoint="chat_completions",
+        pricing=Pricing(input_per_mm=0.80, output_per_mm=2.60),
+        limits={
+            "max_output_tokens": 2000
+        },
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_reasoning", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
+        reasoning_policy={
+            # Ultra's v2 model runner rejects reasoning_budget; thinking is toggle-only.
+            "mode": "nvidia_toggle",
+            "param": "enable_thinking",
+            "default": "low",
+            "counts_against_output": True,
+        },
+        reasoning_parameter=("enable_thinking", True),
+        capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
+        },
+    ),
+    "nvidia:nemotron-3-nano-omni-30b": ModelInfo(
+        provider="nvidia",
+        model="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        endpoint="chat_completions",
+        pricing=None,  # Serverless pricing not published per-token yet; fill in when available.
+        limits={
+            "max_output_tokens": 2000
+        },
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_reasoning", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
+        reasoning_policy={
+            "mode": "nvidia_budget",
+            "param": "reasoning_budget",
+            "default": "low",
+            "budget_map": {
+                "none": 0,
+                "minimal": 512,
+                "low": 1024,
+                "medium": 2048,
+                "high": 4096,
+            },
+            "counts_against_output": True,
+        },
+        reasoning_parameter=("reasoning_budget", 1024),
+        thinking_tax={
+            "effort_map": {
+                "none": {"reserve_ratio": 0.0},
+                "minimal": {"reserve_ratio": 0.25},
+                "low": {"reserve_ratio": 0.30},
+                "medium": {"reserve_ratio": 0.50},
+                "high": {"reserve_ratio": 0.80},
+            },
+            "kind": "budget",
+        },
+        capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
+        },
+    ),
+    "nvidia:deepseek-v4.1-flash": ModelInfo(
+        provider="nvidia",
+        model="deepseek-ai/deepseek-v4.1-flash",
+        endpoint="chat_completions",
+        pricing=None,  # Serverless pricing not published per-token yet; fill in when available.
+        limits={
+            "max_output_tokens": 2000
+        },
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_reasoning", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
+        reasoning_policy={
+            # DeepSeek-V4.1-Flash on NIM rejects reasoning_budget (HTTP 400);
+            # thinking is toggle-only via chat_template_kwargs.
+            "mode": "nvidia_toggle",
+            "param": "enable_thinking",
+            "default": "low",
+            "counts_against_output": True,
+        },
+        reasoning_parameter=("enable_thinking", True),
+        capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
+        },
+    ),
+    "nvidia:nemotron-3.5-lightning-30b": ModelInfo(
+        provider="nvidia",
+        model="nvidia/nemotron-3.5-lightning-30b-a3b",
+        endpoint="chat_completions",
+        pricing=None,  # Serverless pricing not published per-token yet; fill in when available.
+        limits={
+            "max_output_tokens": 2000
+        },
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_reasoning", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
+        reasoning_policy={
+            "mode": "nvidia_budget",
+            "param": "reasoning_budget",
+            "default": "low",
+            "budget_map": {
+                "none": 0,
+                "minimal": 1024,
+                "low": 2048,
+                "medium": 4096,
+                "high": 8192,
+            },
+            "counts_against_output": True,
+        },
+        reasoning_parameter=("reasoning_budget", 2048),
+        thinking_tax={
+            "effort_map": {
+                "none": {"reserve_ratio": 0.0},
+                "minimal": {"reserve_ratio": 0.25},
+                "low": {"reserve_ratio": 0.30},
+                "medium": {"reserve_ratio": 0.50},
+                "high": {"reserve_ratio": 0.80},
+            },
+            "kind": "budget",
+        },
+        capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
+        },
+    ),
 }
 
 
@@ -423,7 +592,7 @@ def validate_registry(registry: Dict[str, ModelInfo], *, strict: bool = True) ->
     if not isinstance(registry, dict) or not registry:
         raise ValueError("REGISTRY must be a non-empty dict[str, ModelInfo]")
 
-    allowed_providers = {"openai", "gemini"}
+    allowed_providers = {"openai", "gemini", "nvidia"}
     allowed_endpoints = {"responses", "chat_completions", "embeddings", "gemini_sdk", "embed_content"}
 
     def _err(msg: str) -> None:

@@ -1,7 +1,7 @@
 ---
 layout: default
 title: "Registry-Driven Unified LLM Adapter for OpenAI and Gemini"
-description: "A Python adapter that lets you interact with OpenAI and Gemini using the same API with a consistent response format."
+description: "A Python adapter that lets you interact with OpenAI, Gemini, and NVIDIA NIM (Nemotron) using the same API with a consistent response format."
 ---
 
 # vrraj-llm-adapter
