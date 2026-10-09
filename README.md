@@ -234,6 +234,7 @@ This pattern keeps the library surface minimal while allowing your application t
 **Provider-Specific Examples:**
 -  openai_embedding_example.py - OpenAI embeddings
 -  openai_adapter_example.py - OpenAI chat
+-  nvidia_nemotron_example.py - NVIDIA NIM chat (Nemotron & DeepSeek)
 -  streaming_call_example.py - Streaming responses
 
 **Advanced Examples:**
@@ -246,7 +247,7 @@ This pattern keeps the library surface minimal while allowing your application t
 
 ### Accessing Reasoning Content
 
-Some models (like Gemini) return reasoning content separately.
+Some models (like Gemini and NVIDIA Nemotron) return reasoning content separately.
 
 ```python
 from llm_adapter import llm_adapter, LLMError
@@ -256,6 +257,41 @@ try:
         model="gemini:native-sdk-reasoning-2.5-flash",
         input="Explain why the sky is blue",
         reasoning_effort="high",   # adapter-level reasoning knob
+        max_output_tokens=1000
+    )
+
+    normalized_response = llm_adapter.normalize_adapter_response(response)
+
+    if normalized_response.get('reasoning'):
+        print(f"Reasoning: {normalized_response['reasoning']}")
+
+    print(normalized_response['text'])
+except LLMError as e:
+    print(f"Error: {e.code} - {e}")
+```
+
+### NVIDIA NIM (Nemotron & DeepSeek)
+
+NVIDIA models are served through NIM's OpenAI-compatible endpoint (`https://integrate.api.nvidia.com/v1`). Set `NVIDIA_API_KEY` (and optionally `NVIDIA_BASE_URL` for a self-hosted NIM container), then use the registry keys:
+
+| Registry key | Model | Reasoning |
+|---|---|---|
+| `nvidia:nemotron-3-super-120b` | Nemotron 3 Super 120B | budget-based (`reasoning_budget`) |
+| `nvidia:nemotron-3-ultra-550b` | Nemotron 3 Ultra 550B | thinking toggle |
+| `nvidia:nemotron-3-nano-omni-30b` | Nemotron 3 Nano Omni 30B | budget-based |
+| `nvidia:nemotron-3.5-lightning-30b` | Nemotron 3.5 Lightning 30B | budget-based |
+| `nvidia:deepseek-v4.1-flash` | DeepSeek V4.1 Flash | thinking toggle |
+
+These hosted models **think by default**. The adapter maps the standard `reasoning_effort` knob (none / minimal / low / medium / high) to NIM's `enable_thinking` and `reasoning_budget` parameters — pass `"none"` to disable thinking:
+
+```python
+from llm_adapter import llm_adapter, LLMError
+
+try:
+    response = llm_adapter.create(
+        model="nvidia:nemotron-3.5-lightning-30b",
+        input="Which number is larger: 9.11 or 9.8?",
+        reasoning_effort="medium",  # none / minimal / low / medium / high
         max_output_tokens=1000
     )
 
