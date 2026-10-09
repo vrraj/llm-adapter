@@ -75,6 +75,7 @@ def _chat_response(content="Hello!", reasoning_content=None, tool_calls=None, fi
 def test_registry_contains_nvidia_models():
     nvidia_keys = sorted(k for k, v in REGISTRY.items() if v.provider == "nvidia")
     assert nvidia_keys == [
+        "nvidia:deepseek-v4.1-flash",
         "nvidia:nemotron-3-nano-omni-30b",
         "nvidia:nemotron-3-super-120b",
         "nvidia:nemotron-3-ultra-550b",
@@ -236,6 +237,7 @@ def test_nvidia_toggle_mode_high_enables_thinking_without_budget():
     "nvidia:nemotron-3-ultra-550b",
     "nvidia:nemotron-3-nano-omni-30b",
     "nvidia:nemotron-3.5-lightning-30b",
+    "nvidia:deepseek-v4.1-flash",
 ])
 def test_reasoning_effort_none_disables_thinking_for_all_nvidia_models(model_key):
     adapter = LLMAdapter()

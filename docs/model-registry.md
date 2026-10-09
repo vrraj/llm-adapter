@@ -33,6 +33,7 @@ Here are the default registry keys included with the package:
 - `gemini:native-embed` - Embeddings (Native SDK)
 
 #### NVIDIA Models
+- `nvidia:deepseek-v4.1-flash` - DeepSeek V4.1 Flash (552B MoE, 1M context), thinking toggle only (OpenAI-compatible NIM endpoint)
 - `nvidia:nemotron-3-super-120b` - Hybrid reasoning via `reasoning_budget` (OpenAI-compatible NIM endpoint)
 - `nvidia:nemotron-3-ultra-550b` - Hybrid reasoning, thinking toggle only (OpenAI-compatible NIM endpoint)
 - `nvidia:nemotron-3-nano-omni-30b` - Lightweight reasoning (OpenAI-compatible NIM endpoint)

@@ -495,6 +495,31 @@ REGISTRY: Dict[str, ModelInfo] = {
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
     ),
+    "nvidia:deepseek-v4.1-flash": ModelInfo(
+        provider="nvidia",
+        model="deepseek-ai/deepseek-v4.1-flash",
+        endpoint="chat_completions",
+        pricing=None,  # Serverless pricing not published per-token yet; fill in when available.
+        limits={
+            "max_output_tokens": 2000
+        },
+        param_policy={
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_reasoning", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
+        reasoning_policy={
+            # DeepSeek-V4.1-Flash on NIM rejects reasoning_budget (HTTP 400);
+            # thinking is toggle-only via chat_template_kwargs.
+            "mode": "nvidia_toggle",
+            "param": "enable_thinking",
+            "default": "low",
+            "counts_against_output": True,
+        },
+        reasoning_parameter=("enable_thinking", True),
+        capabilities={
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
+        },
+    ),
     "nvidia:nemotron-3.5-lightning-30b": ModelInfo(
         provider="nvidia",
         model="nvidia/nemotron-3.5-lightning-30b-a3b",
