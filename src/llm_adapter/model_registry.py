@@ -400,40 +400,96 @@ REGISTRY: Dict[str, ModelInfo] = {
             "max_output_tokens": 2000
         },
         param_policy={
-            "allowed": {"max_output_tokens", "temperature", "top_p", "tools", "tool_choice"},
-            "disabled": {"reasoning_effort", "stream", "include_thoughts"}
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_reasoning", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
+        reasoning_policy={
+            "mode": "nvidia_budget",
+            "param": "reasoning_budget",
+            "default": "low",
+            "budget_map": {
+                "none": 0,
+                "minimal": 1024,
+                "low": 2048,
+                "medium": 4096,
+                "high": 8192,
+            },
+            "counts_against_output": True,
+        },
+        reasoning_parameter=("reasoning_budget", 2048),
+        thinking_tax={
+            "effort_map": {
+                "none": {"reserve_ratio": 0.0},
+                "minimal": {"reserve_ratio": 0.25},
+                "low": {"reserve_ratio": 0.30},
+                "medium": {"reserve_ratio": 0.50},
+                "high": {"reserve_ratio": 0.80},
+            },
+            "kind": "budget",
         },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
     ),
-    "nvidia:nemotron-nano-30b": ModelInfo(
+    "nvidia:nemotron-3-ultra-550b": ModelInfo(
         provider="nvidia",
-        model="nvidia/nemotron-3-nano-30b-a3b",
+        model="nvidia/nemotron-3-ultra-550b-a55b",
         endpoint="chat_completions",
-        pricing=Pricing(input_per_mm=0.05, output_per_mm=0.20),
+        pricing=Pricing(input_per_mm=0.80, output_per_mm=2.60),
         limits={
             "max_output_tokens": 2000
         },
         param_policy={
-            "allowed": {"max_output_tokens", "temperature", "top_p", "tools", "tool_choice"},
-            "disabled": {"reasoning_effort", "stream", "include_thoughts"}
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_reasoning", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
         },
+        reasoning_policy={
+            # Ultra's v2 model runner rejects reasoning_budget; thinking is toggle-only.
+            "mode": "nvidia_toggle",
+            "param": "enable_thinking",
+            "default": "low",
+            "counts_against_output": True,
+        },
+        reasoning_parameter=("enable_thinking", True),
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
     ),
-    "nvidia:nemotron-super-49b": ModelInfo(
+    "nvidia:nemotron-3-nano-omni-30b": ModelInfo(
         provider="nvidia",
-        model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        model="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
         endpoint="chat_completions",
-        pricing=Pricing(input_per_mm=0.10, output_per_mm=0.40),
+        pricing=None,  # Serverless pricing not published per-token yet; fill in when available.
         limits={
             "max_output_tokens": 2000
         },
         param_policy={
-            "allowed": {"max_output_tokens", "temperature", "top_p", "tools", "tool_choice"},
-            "disabled": {"reasoning_effort", "stream", "include_thoughts"}
+            "allowed": {"max_output_tokens", "reasoning_effort", "include_reasoning", "temperature", "top_p", "tools", "tool_choice"},
+            "disabled": set()
+        },
+        reasoning_policy={
+            "mode": "nvidia_budget",
+            "param": "reasoning_budget",
+            "default": "low",
+            "budget_map": {
+                "none": 0,
+                "minimal": 512,
+                "low": 1024,
+                "medium": 2048,
+                "high": 4096,
+            },
+            "counts_against_output": True,
+        },
+        reasoning_parameter=("reasoning_budget", 1024),
+        thinking_tax={
+            "effort_map": {
+                "none": {"reserve_ratio": 0.0},
+                "minimal": {"reserve_ratio": 0.25},
+                "low": {"reserve_ratio": 0.30},
+                "medium": {"reserve_ratio": 0.50},
+                "high": {"reserve_ratio": 0.80},
+            },
+            "kind": "budget",
         },
         capabilities={
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation

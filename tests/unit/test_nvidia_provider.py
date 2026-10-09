@@ -75,10 +75,10 @@ def _chat_response(content="Hello!", reasoning_content=None, tool_calls=None, fi
 def test_registry_contains_nvidia_models():
     nvidia_keys = sorted(k for k, v in REGISTRY.items() if v.provider == "nvidia")
     assert nvidia_keys == [
+        "nvidia:nemotron-3-nano-omni-30b",
         "nvidia:nemotron-3-super-120b",
+        "nvidia:nemotron-3-ultra-550b",
         "nvidia:nemotron-3.5-lightning-30b",
-        "nvidia:nemotron-nano-30b",
-        "nvidia:nemotron-super-49b",
     ]
 
 
@@ -201,11 +201,65 @@ def test_nvidia_reasoning_policy_ignores_non_nvidia_models():
     assert out == kwargs
 
 
-def test_nvidia_reasoning_policy_ignores_non_reasoning_nvidia_models():
+# ----------------------------
+# nvidia_toggle mode (budget not supported by the model runner)
+# ----------------------------
+
+def test_nvidia_toggle_mode_none_disables_thinking():
     adapter = LLMAdapter()
-    kwargs = {"temperature": 0.5}
-    out = adapter._apply_nvidia_reasoning_policy("nvidia:nemotron-3-super-120b", dict(kwargs))
-    assert out == kwargs
+    out = adapter._apply_nvidia_reasoning_policy(
+        "nvidia:nemotron-3-ultra-550b",
+        {"reasoning_effort": "none"},
+    )
+    assert out["extra_body"]["chat_template_kwargs"]["enable_thinking"] is False
+    assert "reasoning_budget" not in out["extra_body"]
+
+
+def test_nvidia_toggle_mode_high_enables_thinking_without_budget():
+    adapter = LLMAdapter()
+    out = adapter._apply_nvidia_reasoning_policy(
+        "nvidia:nemotron-3-ultra-550b",
+        {"reasoning_effort": "high"},
+    )
+    assert out["extra_body"]["chat_template_kwargs"]["enable_thinking"] is True
+    assert "reasoning_budget" not in out["extra_body"]
+
+
+# ----------------------------
+# "none" must disable thinking on every hybrid reasoning model
+# (regression: the knob was dropped for models without a reasoning_policy,
+# and NIM's server-side default has thinking enabled)
+# ----------------------------
+
+@pytest.mark.parametrize("model_key", [
+    "nvidia:nemotron-3-super-120b",
+    "nvidia:nemotron-3-ultra-550b",
+    "nvidia:nemotron-3-nano-omni-30b",
+    "nvidia:nemotron-3.5-lightning-30b",
+])
+def test_reasoning_effort_none_disables_thinking_for_all_nvidia_models(model_key):
+    adapter = LLMAdapter()
+    out = adapter._apply_nvidia_reasoning_policy(model_key, {"reasoning_effort": "none"})
+    assert out["extra_body"]["chat_template_kwargs"]["enable_thinking"] is False
+
+
+def test_super_120b_now_has_budget_reasoning_policy():
+    adapter = LLMAdapter()
+    out = adapter._apply_nvidia_reasoning_policy(
+        "nvidia:nemotron-3-super-120b",
+        {"reasoning_effort": "medium"},
+    )
+    assert out["extra_body"]["reasoning_budget"] == 4096
+    assert out["extra_body"]["chat_template_kwargs"]["enable_thinking"] is True
+
+
+def test_nano_omni_budget_map_is_smaller():
+    adapter = LLMAdapter()
+    out = adapter._apply_nvidia_reasoning_policy(
+        "nvidia:nemotron-3-nano-omni-30b",
+        {"reasoning_effort": "low"},
+    )
+    assert out["extra_body"]["reasoning_budget"] == 1024
 
 
 # ----------------------------
@@ -238,9 +292,9 @@ def test_create_dispatches_nvidia_by_registry_inference():
 
 def test_create_dispatches_nvidia_with_explicit_provider():
     adapter, fake = _make_adapter_with_fake_client(_chat_response())
-    resp = adapter.create(provider="nvidia", model="nvidia:nemotron-nano-30b", input="Hello")
+    resp = adapter.create(provider="nvidia", model="nvidia:nemotron-3-nano-omni-30b", input="Hello")
     assert isinstance(resp, AdapterResponse)
-    assert fake.chat.completions.last_kwargs["model"] == "nvidia/nemotron-3-nano-30b-a3b"
+    assert fake.chat.completions.last_kwargs["model"] == "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
 
 
 def test_create_nvidia_wraps_usage_and_metadata():

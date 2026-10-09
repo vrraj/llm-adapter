@@ -1534,7 +1534,7 @@ class LLMAdapter:
             return kwargs
 
         mode = str(policy.get("mode") or "").strip().lower()
-        if mode != "nvidia_budget":
+        if mode not in ("nvidia_budget", "nvidia_toggle"):
             return kwargs
 
         out = dict(kwargs)
@@ -1547,32 +1547,37 @@ class LLMAdapter:
 
         # NVIDIA NIM reasoning models take non-standard params via extra_body:
         #   chat_template_kwargs: {"enable_thinking": bool}   (toggle thinking)
-        #   reasoning_budget: <int>                             (token budget for thoughts)
-        budget_map = policy.get("budget_map") if isinstance(policy.get("budget_map"), dict) else {}
-        budget = budget_map.get(effort_name)
-        if budget is None:
-            budget = budget_map.get("low", budget_map.get("medium", 0))
-        try:
-            budget_i = int(budget)
-        except Exception:
-            budget_i = 0
-        if budget_i < 0:
-            budget_i = 0
+        #   reasoning_budget: <int>                             (token budget for thoughts, budget models only)
+        enable_thinking = effort_name != "none"
 
-        enable_thinking = effort_name != "none" and budget_i > 0
+        budget_i = 0
+        if mode == "nvidia_budget":
+            budget_map = policy.get("budget_map") if isinstance(policy.get("budget_map"), dict) else {}
+            budget = budget_map.get(effort_name)
+            if budget is None:
+                budget = budget_map.get("low", budget_map.get("medium", 0))
+            try:
+                budget_i = int(budget)
+            except Exception:
+                budget_i = 0
+            if budget_i < 0:
+                budget_i = 0
 
-        # Clamp budget so it cannot consume the entire output cap.
-        base_max = out.get("max_output_tokens")
-        base_max_i = None
-        try:
-            if base_max is not None:
-                base_max_i = int(base_max)
-        except Exception:
-            base_max_i = None
-        if enable_thinking and base_max_i is not None and base_max_i > 0:
-            # Keep at least 100 tokens for visible answer.
-            cap = max(base_max_i - 100, 0)
-            budget_i = min(budget_i, cap)
+            if enable_thinking:
+                # Clamp budget so it cannot consume the entire output cap.
+                base_max = out.get("max_output_tokens")
+                base_max_i = None
+                try:
+                    if base_max is not None:
+                        base_max_i = int(base_max)
+                except Exception:
+                    base_max_i = None
+                if base_max_i is not None and base_max_i > 0:
+                    # Keep at least 100 tokens for visible answer.
+                    cap = max(base_max_i - 100, 0)
+                    budget_i = min(budget_i, cap)
+            else:
+                budget_i = 0
 
         # Merge into caller's extra_body without clobbering unrelated keys.
         extra_body = out.get("extra_body")
@@ -1587,7 +1592,7 @@ class LLMAdapter:
         ctk["enable_thinking"] = enable_thinking
         extra_body["chat_template_kwargs"] = ctk
 
-        if enable_thinking:
+        if mode == "nvidia_budget" and enable_thinking and budget_i > 0:
             extra_body["reasoning_budget"] = int(budget_i)
 
         out["extra_body"] = extra_body
