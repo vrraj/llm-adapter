@@ -244,7 +244,8 @@ For quick registry overrides without the demo UI:
 
 4. **Start demo UI:**
    ```bash
-   make start
+   make start   # background; prints http://localhost:7100/ui/ when ready
+   make fg      # foreground
    ```
 
 ### Code Organization Principles

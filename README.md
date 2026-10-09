@@ -470,7 +470,9 @@ bash scripts/llm_adapter_setup.sh
 make start
 ```
 
->**Note:** Run `make start` to run in foreground or `make start-bg` to run in background. Use `make stop` to stop the server.
+This runs the server in the background, waits until it is ready, and prints the UI URL
+(default: http://localhost:7100/ui/). Use `make fg` to run in the foreground instead,
+`make logs` to follow server logs, and `make stop` to stop the server.
 
 4. Open the demo UI:
 
