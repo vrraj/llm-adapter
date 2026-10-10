@@ -560,6 +560,23 @@ REGISTRY: Dict[str, ModelInfo] = {
             "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
         },
     ),
+
+    # NVIDIA NIM embedding model (hosted endpoint verified).
+    # NIM embeddings accept input_type ("query" | "passage") and truncate ("NONE" | "START" | "END").
+    "nvidia:nemotron-3-embed-1b": ModelInfo(
+        provider="nvidia",
+        model="nvidia/nemotron-3-embed-1b",
+        endpoint="embeddings",
+        pricing=None,  # Serverless pricing not published per-token yet; fill in when available.
+        param_policy={
+            "allowed": {"normalize_embedding", "input_type", "truncate", "encoding_format", "dimensions"},
+            "disabled": {"include_thoughts", "output_dimensionality"}
+        },
+        capabilities={
+            "dimensions": 2048,
+            "assistant_role": "assistant", # Model Response Role  - will be used to send in Request for  conversation
+        },
+    ),
 }
 
 

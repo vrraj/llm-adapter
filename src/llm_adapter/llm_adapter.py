@@ -2064,6 +2064,92 @@ class LLMAdapter:
             tool_calls=tool_calls,
         )
 
+    def _provider_error_to_llmerror(
+        self,
+        *,
+        provider: str,
+        model: Optional[str],
+        exc: Exception,
+    ) -> Optional["LLMError"]:
+        """Map a provider SDK/HTTP exception to a structured LLMError.
+
+        Returns None when exc is not a recognized provider error (e.g. a
+        programming bug in adapter code), so callers re-raise it unchanged.
+        """
+        status: Optional[int] = None
+        is_sdk_error = False
+
+        # OpenAI SDK errors (also used for NVIDIA NIM and Gemini OpenAI-compatible calls)
+        if isinstance(exc, openai.APIError):
+            is_sdk_error = True
+            if isinstance(exc, openai.APIConnectionError):
+                return LLMError(provider=provider, model=model, kind="network",
+                                code="connection_error", message=str(exc))
+            if isinstance(exc, openai.APITimeoutError):
+                return LLMError(provider=provider, model=model, kind="timeout",
+                                code="timeout", message=str(exc))
+            sc = getattr(exc, "status_code", None)
+            status = sc if isinstance(sc, int) else None
+
+        # google-genai SDK errors expose `.code` as an int status
+        if not is_sdk_error:
+            try:
+                from google.genai import errors as _genai_errors  # type: ignore
+                if isinstance(exc, _genai_errors.APIError):
+                    is_sdk_error = True
+                    c = getattr(exc, "code", None)
+                    status = c if isinstance(c, int) else None
+            except Exception:
+                pass
+
+        if not is_sdk_error:
+            return None
+
+        # Retry-After header (rate limits)
+        retry_after: Optional[float] = None
+        try:
+            resp = getattr(exc, "response", None)
+            headers = getattr(resp, "headers", None) or {}
+            ra = headers.get("retry-after") or headers.get("Retry-After")
+            if ra is not None:
+                retry_after = float(ra)
+        except Exception:
+            retry_after = None
+
+        if status in (401, 403):
+            kind = "auth"
+        elif status in (404, 410):
+            kind = "model_not_found"
+        elif status == 408:
+            kind = "timeout"
+        elif status == 429:
+            kind = "rate_limit"
+        elif status is not None and status >= 500:
+            kind = "provider_error"
+        else:
+            kind = "request"
+
+        return LLMError(
+            provider=provider,
+            model=model,
+            kind=kind,
+            code=status,
+            message=str(exc),
+            retry_after=retry_after,
+        )
+
+    def _wrap_provider_call(self, *, provider: str, model: Optional[str], fn: Callable[[], Any]) -> Any:
+        """Run a provider SDK call, translating provider errors to LLMError."""
+        try:
+            return fn()
+        except LLMError:
+            raise
+        except Exception as e:
+            mapped = self._provider_error_to_llmerror(provider=provider, model=model, exc=e)
+            if mapped is not None:
+                raise mapped from e
+            raise
+
     def create(
         self,
         *,
@@ -2148,12 +2234,21 @@ class LLMAdapter:
 
         if provider == "openai":
             kwargs.pop("__model_spec", None)
-            return self._openai_call(model=model, input=input, stream=stream, **kwargs)
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._openai_call(model=model, input=input, stream=stream, **kwargs),
+            )
         if provider == "gemini":
-            return self._gemini_call(model=model, input=input, stream=stream, **kwargs)
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._gemini_call(model=model, input=input, stream=stream, **kwargs),
+            )
         if provider == "nvidia":
             kwargs.pop("__model_spec", None)
-            return self._nvidia_call(model=model, input=input, stream=stream, **kwargs)
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._nvidia_call(model=model, input=input, stream=stream, **kwargs),
+            )
 
         raise LLMError(
             provider=str(provider or "unknown"),
@@ -2211,15 +2306,33 @@ class LLMAdapter:
             )
 
         if provider == "openai":
-            return self._openai_embedding_call(model=model, input=input, **kwargs)
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._openai_embedding_call(model=model, input=input, **kwargs),
+            )
 
         if provider == "gemini":
             if endpoint == "embed_content":
-                return self._gemini_native_embedding_call(model=model, input=input, **kwargs)
-            return self._gemini_embedding_call(model=model, input=input, **kwargs)
+                return self._wrap_provider_call(
+                    provider=provider, model=model,
+                    fn=lambda: self._gemini_native_embedding_call(model=model, input=input, **kwargs),
+                )
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._gemini_embedding_call(model=model, input=input, **kwargs),
+            )
 
         if provider == "gemini_native":
-            return self._gemini_native_embedding_call(model=model, input=input, **kwargs)
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._gemini_native_embedding_call(model=model, input=input, **kwargs),
+            )
+
+        if provider == "nvidia":
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._nvidia_embedding_call(model=model, input=input, **kwargs),
+            )
 
         raise LLMError(
             provider=str(provider or "unknown"),
@@ -2819,6 +2932,95 @@ class LLMAdapter:
             return self._wrap_nvidia_chatcompletion_as_responses(resp, model_key=model, resolved_model=resolved_model)
 
         return resp
+
+    def _nvidia_embedding_call(self, *, model: str, input: Any, **kwargs: Any):
+        """NVIDIA embedding call via the NIM OpenAI-compatible client."""
+        import time
+        start_time = time.time()
+
+        client = self._get_nvidia()
+        resolved_model = self._resolve_provider_model_name(model)
+
+        normalize_embedding = bool(kwargs.pop("normalize_embedding", False))
+
+        # NIM-specific params (input_type, truncate) are not OpenAI SDK
+        # arguments; forward them through extra_body.
+        nvidia_extra: Dict[str, Any] = {}
+        for p in ("input_type", "truncate"):
+            if p in kwargs:
+                nvidia_extra[p] = kwargs.pop(p)
+        if nvidia_extra:
+            eb = dict(kwargs.pop("extra_body", None) or {})
+            eb.update(nvidia_extra)
+            kwargs["extra_body"] = eb
+
+        raw_response = client.embeddings.create(model=resolved_model, input=input, **kwargs)
+
+        # Extract embedding vectors from response
+        vectors = []
+        for embedding_obj in raw_response.data:
+            vectors.append(embedding_obj.embedding)
+
+        # Optional L2 normalization
+        if normalize_embedding and vectors:
+            import math
+            for i, vec in enumerate(vectors):
+                n = math.sqrt(sum(float(x) * float(x) for x in vec))
+                if n > 0:
+                    vectors[i] = [float(x) / n for x in vec]
+
+        # Prepare metadata
+        input_texts = input if isinstance(input, list) else [input]
+
+        metadata = {
+            # Response characteristics
+            "dimensions": len(vectors[0]) if vectors else None,
+            "vector_type": "dense",
+            "precision": "float32",
+
+            # Input context
+            "input_count": len(input_texts),
+            "processing_order": list(range(len(input_texts))),
+
+            # Performance and debugging
+            "processing_time": time.time() - start_time,
+            "raw_response_id": getattr(raw_response, 'id', None),
+            "cache_hit": False,
+            "retry_count": 0,
+
+            # Convenience fields
+            "total_tokens_used": getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0,
+        }
+
+        # Usage extraction (avoid precedence bugs in inline conditional/or expressions)
+        u = getattr(raw_response, "usage", None)
+        pt = 0
+        tt = 0
+        try:
+            if u is not None:
+                pt = getattr(u, "input_tokens", None)
+                if pt is None:
+                    pt = getattr(u, "prompt_tokens", None)
+                pt = int(pt or 0)
+                tt = int(getattr(u, "total_tokens", 0) or 0)
+        except Exception:
+            pt = 0
+            tt = 0
+
+        return EmbeddingResponse(
+            data=vectors,  # Direct list of embedding vectors
+            usage=EmbeddingUsage(
+                prompt_tokens=pt,
+                total_tokens=tt,
+            ),
+            normalized=self._was_normalization_applied("nvidia", **kwargs),
+            vector_dim=len(vectors[0]) if vectors else None,
+            metadata={
+                "provider": "nvidia",
+                "model": resolved_model,
+            },
+            raw=raw_response
+        )
 
     def _gemini_embedding_call(self, *, model: str, input: Any, **kwargs: Any):
         """Gemini embedding call via the OpenAI-compatible adapter client."""
