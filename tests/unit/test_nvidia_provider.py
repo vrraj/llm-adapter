@@ -76,11 +76,21 @@ def test_registry_contains_nvidia_models():
     nvidia_keys = sorted(k for k, v in REGISTRY.items() if v.provider == "nvidia")
     assert nvidia_keys == [
         "nvidia:deepseek-v4.1-flash",
+        "nvidia:nemotron-3-embed-1b",
         "nvidia:nemotron-3-nano-omni-30b",
         "nvidia:nemotron-3-super-120b",
         "nvidia:nemotron-3-ultra-550b",
         "nvidia:nemotron-3.5-lightning-30b",
     ]
+
+
+def test_registry_nvidia_embed_model():
+    mi = get_model_info("nvidia:nemotron-3-embed-1b")
+    assert mi.provider == "nvidia"
+    assert mi.model == "nvidia/nemotron-3-embed-1b"
+    assert mi.endpoint == "embeddings"
+    assert mi.capabilities["dimensions"] == 2048
+    assert "input_type" in mi.param_policy["allowed"]
 
 
 def test_registry_nvidia_model_info_fields():
@@ -369,6 +379,70 @@ def test_prepare_nvidia_kwargs_drops_model_spec_marker():
     )
     assert "__model_spec" not in out
     assert out["temperature"] == 0.1
+
+
+# ----------------------------
+# Embeddings
+# ----------------------------
+
+class _FakeEmbeddings:
+    def __init__(self, response):
+        self._response = response
+        self.last_kwargs = None
+
+    def create(self, **kwargs):
+        self.last_kwargs = kwargs
+        return self._response
+
+
+class _FakeNvidiaEmbedClient:
+    def __init__(self, response):
+        self.embeddings = _FakeEmbeddings(response)
+
+
+def _embed_response(vectors=None, prompt_tokens=2):
+    vectors = vectors if vectors is not None else [[0.1, 0.2, 0.3]]
+    return _Obj(
+        data=[_Obj(embedding=v) for v in vectors],
+        usage=_Obj(prompt_tokens=prompt_tokens, total_tokens=prompt_tokens),
+    )
+
+
+def test_create_embedding_nvidia_dispatch():
+    fake = _FakeNvidiaEmbedClient(_embed_response())
+    adapter = LLMAdapter(nvidia_api_key="nvapi-test", nvidia_client=fake)
+    resp = adapter.create_embedding(model="nvidia:nemotron-3-embed-1b", input=["hello"])
+    assert resp.data == [[0.1, 0.2, 0.3]]
+    assert resp.vector_dim == 3
+    assert resp.usage.prompt_tokens == 2
+    assert fake.embeddings.last_kwargs["model"] == "nvidia/nemotron-3-embed-1b"
+
+
+def test_create_embedding_nvidia_input_type_via_extra_body():
+    fake = _FakeNvidiaEmbedClient(_embed_response())
+    adapter = LLMAdapter(nvidia_api_key="nvapi-test", nvidia_client=fake)
+    adapter.create_embedding(
+        model="nvidia:nemotron-3-embed-1b",
+        input=["doc text"],
+        input_type="passage",
+        truncate="END",
+    )
+    sent = fake.embeddings.last_kwargs
+    assert sent["extra_body"]["input_type"] == "passage"
+    assert sent["extra_body"]["truncate"] == "END"
+    assert "input_type" not in sent or sent.get("input_type") is None
+
+
+def test_create_embedding_nvidia_normalize_embedding():
+    fake = _FakeNvidiaEmbedClient(_embed_response(vectors=[[3.0, 4.0]]))
+    adapter = LLMAdapter(nvidia_api_key="nvapi-test", nvidia_client=fake)
+    resp = adapter.create_embedding(
+        model="nvidia:nemotron-3-embed-1b",
+        input=["x"],
+        normalize_embedding=True,
+    )
+    import math
+    assert math.isclose(math.sqrt(sum(x * x for x in resp.data[0])), 1.0)
 
 
 if __name__ == "__main__":

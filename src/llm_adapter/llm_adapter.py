@@ -2221,6 +2221,9 @@ class LLMAdapter:
         if provider == "gemini_native":
             return self._gemini_native_embedding_call(model=model, input=input, **kwargs)
 
+        if provider == "nvidia":
+            return self._nvidia_embedding_call(model=model, input=input, **kwargs)
+
         raise LLMError(
             provider=str(provider or "unknown"),
             model=model,
@@ -2819,6 +2822,95 @@ class LLMAdapter:
             return self._wrap_nvidia_chatcompletion_as_responses(resp, model_key=model, resolved_model=resolved_model)
 
         return resp
+
+    def _nvidia_embedding_call(self, *, model: str, input: Any, **kwargs: Any):
+        """NVIDIA embedding call via the NIM OpenAI-compatible client."""
+        import time
+        start_time = time.time()
+
+        client = self._get_nvidia()
+        resolved_model = self._resolve_provider_model_name(model)
+
+        normalize_embedding = bool(kwargs.pop("normalize_embedding", False))
+
+        # NIM-specific params (input_type, truncate) are not OpenAI SDK
+        # arguments; forward them through extra_body.
+        nvidia_extra: Dict[str, Any] = {}
+        for p in ("input_type", "truncate"):
+            if p in kwargs:
+                nvidia_extra[p] = kwargs.pop(p)
+        if nvidia_extra:
+            eb = dict(kwargs.pop("extra_body", None) or {})
+            eb.update(nvidia_extra)
+            kwargs["extra_body"] = eb
+
+        raw_response = client.embeddings.create(model=resolved_model, input=input, **kwargs)
+
+        # Extract embedding vectors from response
+        vectors = []
+        for embedding_obj in raw_response.data:
+            vectors.append(embedding_obj.embedding)
+
+        # Optional L2 normalization
+        if normalize_embedding and vectors:
+            import math
+            for i, vec in enumerate(vectors):
+                n = math.sqrt(sum(float(x) * float(x) for x in vec))
+                if n > 0:
+                    vectors[i] = [float(x) / n for x in vec]
+
+        # Prepare metadata
+        input_texts = input if isinstance(input, list) else [input]
+
+        metadata = {
+            # Response characteristics
+            "dimensions": len(vectors[0]) if vectors else None,
+            "vector_type": "dense",
+            "precision": "float32",
+
+            # Input context
+            "input_count": len(input_texts),
+            "processing_order": list(range(len(input_texts))),
+
+            # Performance and debugging
+            "processing_time": time.time() - start_time,
+            "raw_response_id": getattr(raw_response, 'id', None),
+            "cache_hit": False,
+            "retry_count": 0,
+
+            # Convenience fields
+            "total_tokens_used": getattr(raw_response.usage, 'total_tokens', 0) if hasattr(raw_response, 'usage') else 0,
+        }
+
+        # Usage extraction (avoid precedence bugs in inline conditional/or expressions)
+        u = getattr(raw_response, "usage", None)
+        pt = 0
+        tt = 0
+        try:
+            if u is not None:
+                pt = getattr(u, "input_tokens", None)
+                if pt is None:
+                    pt = getattr(u, "prompt_tokens", None)
+                pt = int(pt or 0)
+                tt = int(getattr(u, "total_tokens", 0) or 0)
+        except Exception:
+            pt = 0
+            tt = 0
+
+        return EmbeddingResponse(
+            data=vectors,  # Direct list of embedding vectors
+            usage=EmbeddingUsage(
+                prompt_tokens=pt,
+                total_tokens=tt,
+            ),
+            normalized=self._was_normalization_applied("nvidia", **kwargs),
+            vector_dim=len(vectors[0]) if vectors else None,
+            metadata={
+                "provider": "nvidia",
+                "model": resolved_model,
+            },
+            raw=raw_response
+        )
 
     def _gemini_embedding_call(self, *, model: str, input: Any, **kwargs: Any):
         """Gemini embedding call via the OpenAI-compatible adapter client."""

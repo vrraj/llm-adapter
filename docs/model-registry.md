@@ -38,6 +38,7 @@ Here are the default registry keys included with the package:
 - `nvidia:nemotron-3-ultra-550b` - Hybrid reasoning, thinking toggle only (OpenAI-compatible NIM endpoint)
 - `nvidia:nemotron-3-nano-omni-30b` - Lightweight reasoning (OpenAI-compatible NIM endpoint)
 - `nvidia:nemotron-3.5-lightning-30b` - Budget-based reasoning via `reasoning_budget` (OpenAI-compatible NIM endpoint)
+- `nvidia:nemotron-3-embed-1b` - Text embeddings, 2048 dims (OpenAI-compatible NIM endpoint; `input_type`/`truncate` forwarded via `extra_body`)
 
 All NVIDIA hosted reasoning models think **by default**; pass `reasoning_effort="none"` to disable
 thinking (`extra_body={"chat_template_kwargs": {"enable_thinking": false}}`).

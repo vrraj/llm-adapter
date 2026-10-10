@@ -174,9 +174,11 @@ def create_embedding(
 
 **Common `**kwargs` (model-dependent):**
 - `dimensions`: `int` - Output embedding dimensions (when supported)
-- `normalize_embedding`: `bool` - Whether to normalize vectors (Gemini only)
+- `normalize_embedding`: `bool` - Whether to L2-normalize vectors (Gemini and NVIDIA)
 - `task_type`: `str` - Task type for Gemini native embeddings
 - `output_dimensionality`: `int` - Output dimensions for Gemini native embeddings
+- `input_type`: `str` - `"query"` or `"passage"` for NVIDIA NIM embeddings (forwarded via `extra_body`)
+- `truncate`: `str` - `"NONE"`, `"START"`, or `"END"` for NVIDIA NIM embeddings (forwarded via `extra_body`)
 
 **Returns:** `EmbeddingResponse`
 
@@ -199,6 +201,14 @@ response = llm_adapter.create_embedding(
 response = llm_adapter.create_embedding(
     model="gemini:openai-embed",
     input="Text to normalize",
+    normalize_embedding=True
+)
+
+# NVIDIA NIM embeddings (asymmetric retrieval)
+response = llm_adapter.create_embedding(
+    model="nvidia:nemotron-3-embed-1b",
+    input="passage text to index",
+    input_type="passage",
     normalize_embedding=True
 )
 ```

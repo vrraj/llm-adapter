@@ -285,10 +285,21 @@ No local NIM deployment is required: get an API key from [build.nvidia.com](http
 | `nvidia:nemotron-3-nano-omni-30b` | Nemotron 3 Nano Omni 30B | budget-based |
 | `nvidia:nemotron-3.5-lightning-30b` | Nemotron 3.5 Lightning 30B | budget-based |
 | `nvidia:deepseek-v4.1-flash` | DeepSeek V4.1 Flash | thinking toggle |
+| `nvidia:nemotron-3-embed-1b` | Nemotron 3 Embed 1B (2048-dim embeddings) | — |
 
 These hosted models **think by default**. The adapter maps the standard `reasoning_effort` knob (none / minimal / low / medium / high) to NIM's `enable_thinking` and `reasoning_budget` parameters — pass `"none"` to disable thinking.
 
 Usage reporting varies by NIM model: some models (e.g. `nemotron-3-ultra-550b`) do not populate `usage.completion_tokens_details`, so `reasoning_tokens` may be `0` even when reasoning occurred — reasoning tokens are still billed inside `output_tokens` in that case.
+
+Embeddings work through `create_embedding()` — `input_type` (`"query"`/`"passage"`) and `truncate` are forwarded via `extra_body`:
+
+```python
+response = llm_adapter.create_embedding(
+    model="nvidia:nemotron-3-embed-1b",
+    input="text to index",
+    input_type="passage",
+)
+```
 
 ```python
 from llm_adapter import llm_adapter, LLMError
