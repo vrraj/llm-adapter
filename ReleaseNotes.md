@@ -1,5 +1,41 @@
 # Release Notes
 
+## Version 1.2.0 — NVIDIA NIM Embeddings & Structured Provider Errors
+
+### Overview
+
+Adds NVIDIA NIM embedding support and normalizes provider-side HTTP errors into the
+structured `LLMError` type across all providers.
+
+### NVIDIA Embeddings
+
+- `create_embedding()` now supports the `nvidia` provider via the NIM
+  OpenAI-compatible `/embeddings` endpoint
+- New registry model: `nvidia:nemotron-3-embed-1b` (2048 dimensions)
+- NIM-specific parameters `input_type` (`"query"` / `"passage"`) and `truncate`
+  are forwarded through `extra_body`
+- `normalize_embedding=True` applies client-side L2 normalization
+
+### Structured Provider Error Handling
+
+- `create()` and `create_embedding()` now translate provider SDK/HTTP errors
+  into `LLMError` instead of leaking raw SDK exception types
+- Mapping: `401/403 → auth`, `404/410 → model_not_found`, `408 → timeout`,
+  `429 → rate_limit` (with `retry_after` from response headers),
+  `5xx → provider_error`, connection failures → `network`
+- The original SDK exception is preserved via exception chaining (`__cause__`)
+- Non-SDK errors (programming bugs) continue to propagate unwrapped
+
+### Compatibility Note
+
+Error paths now raise `LLMError` rather than raw `openai`/`google.genai`
+exceptions. Callers catching generic `Exception` or `LLMError` are unaffected;
+callers relying on SDK-specific exception types (e.g. `except openai.NotFoundError`)
+should catch `LLMError` and inspect `kind`/`code` instead. Mid-stream errors
+raised during iteration are not wrapped.
+
+---
+
 ## Version 1.1.0 — NVIDIA NIM (Nemotron & DeepSeek) Provider
 
 ### Overview
