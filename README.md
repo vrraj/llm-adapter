@@ -1,5 +1,5 @@
 # vrraj-llm-adapter 
-[![PyPI - Version](https://img.shields.io/pypi/v/vrraj-llm-adapter?color=blue&logo=pypi&logoColor=white)](https://pypi.org/project/vrraj-llm-adapter/)
+[![PyPI - Version](https://img.shields.io/pypi/v/vrraj-llm-adapter?color=blue&logo=pypi&logoColor=white&cacheSeconds=300)](https://pypi.org/project/vrraj-llm-adapter/)
 [![GitHub Release](https://img.shields.io/github/v/release/vrraj/llm-adapter?label=github%20release&color=orange&logo=github)](https://github.com/vrraj/llm-adapter/releases)
 ![CI Status](https://github.com/vrraj/llm-adapter/actions/workflows/ci.yml/badge.svg)
 
