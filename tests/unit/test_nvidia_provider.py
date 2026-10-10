@@ -445,5 +445,76 @@ def test_create_embedding_nvidia_normalize_embedding():
     assert math.isclose(math.sqrt(sum(x * x for x in resp.data[0])), 1.0)
 
 
+# ----------------------------
+# Provider error mapping (SDK errors -> LLMError)
+# ----------------------------
+
+class _RaisingCompletions:
+    def __init__(self, exc):
+        self._exc = exc
+
+    def create(self, **kwargs):
+        raise self._exc
+
+
+def _openai_error(status, headers=None):
+    import httpx
+    import openai as _openai
+    req = httpx.Request("POST", "https://integrate.api.nvidia.com/v1/chat/completions")
+    resp = httpx.Response(status, headers=headers or {}, request=req)
+    return _openai.APIStatusError("error", response=resp, body=None)
+
+
+def _nvidia_chat_adapter_raising(exc):
+    fake = _Obj(chat=_Obj(completions=_RaisingCompletions(exc)))
+    return LLMAdapter(nvidia_api_key="nvapi-test", nvidia_client=fake)
+
+
+def test_nvidia_404_maps_to_model_not_found():
+    adapter = _nvidia_chat_adapter_raising(_openai_error(404))
+    with pytest.raises(LLMError) as exc_info:
+        adapter.create(model="nvidia:nemotron-3-super-120b", input="hi")
+    assert exc_info.value.provider == "nvidia"
+    assert exc_info.value.kind == "model_not_found"
+    assert exc_info.value.code == 404
+
+
+def test_nvidia_403_maps_to_auth():
+    adapter = _nvidia_chat_adapter_raising(_openai_error(403))
+    with pytest.raises(LLMError) as exc_info:
+        adapter.create(model="nvidia:nemotron-3-super-120b", input="hi")
+    assert exc_info.value.kind == "auth"
+    assert exc_info.value.code == 403
+
+
+def test_nvidia_429_maps_to_rate_limit_with_retry_after():
+    adapter = _nvidia_chat_adapter_raising(_openai_error(429, headers={"retry-after": "2.5"}))
+    with pytest.raises(LLMError) as exc_info:
+        adapter.create(model="nvidia:nemotron-3-super-120b", input="hi")
+    assert exc_info.value.kind == "rate_limit"
+    assert exc_info.value.retry_after == 2.5
+
+
+def test_nvidia_503_maps_to_provider_error():
+    adapter = _nvidia_chat_adapter_raising(_openai_error(503))
+    with pytest.raises(LLMError) as exc_info:
+        adapter.create(model="nvidia:nemotron-3-super-120b", input="hi")
+    assert exc_info.value.kind == "provider_error"
+
+
+def test_nvidia_error_chain_preserves_cause():
+    sdk_exc = _openai_error(404)
+    adapter = _nvidia_chat_adapter_raising(sdk_exc)
+    with pytest.raises(LLMError) as exc_info:
+        adapter.create(model="nvidia:nemotron-3-super-120b", input="hi")
+    assert exc_info.value.__cause__ is sdk_exc
+
+
+def test_non_sdk_error_reraises_unchanged():
+    adapter = _nvidia_chat_adapter_raising(TypeError("bug"))
+    with pytest.raises(TypeError):
+        adapter.create(model="nvidia:nemotron-3-super-120b", input="hi")
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))

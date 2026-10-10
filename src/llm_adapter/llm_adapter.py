@@ -2064,6 +2064,92 @@ class LLMAdapter:
             tool_calls=tool_calls,
         )
 
+    def _provider_error_to_llmerror(
+        self,
+        *,
+        provider: str,
+        model: Optional[str],
+        exc: Exception,
+    ) -> Optional["LLMError"]:
+        """Map a provider SDK/HTTP exception to a structured LLMError.
+
+        Returns None when exc is not a recognized provider error (e.g. a
+        programming bug in adapter code), so callers re-raise it unchanged.
+        """
+        status: Optional[int] = None
+        is_sdk_error = False
+
+        # OpenAI SDK errors (also used for NVIDIA NIM and Gemini OpenAI-compatible calls)
+        if isinstance(exc, openai.APIError):
+            is_sdk_error = True
+            if isinstance(exc, openai.APIConnectionError):
+                return LLMError(provider=provider, model=model, kind="network",
+                                code="connection_error", message=str(exc))
+            if isinstance(exc, openai.APITimeoutError):
+                return LLMError(provider=provider, model=model, kind="timeout",
+                                code="timeout", message=str(exc))
+            sc = getattr(exc, "status_code", None)
+            status = sc if isinstance(sc, int) else None
+
+        # google-genai SDK errors expose `.code` as an int status
+        if not is_sdk_error:
+            try:
+                from google.genai import errors as _genai_errors  # type: ignore
+                if isinstance(exc, _genai_errors.APIError):
+                    is_sdk_error = True
+                    c = getattr(exc, "code", None)
+                    status = c if isinstance(c, int) else None
+            except Exception:
+                pass
+
+        if not is_sdk_error:
+            return None
+
+        # Retry-After header (rate limits)
+        retry_after: Optional[float] = None
+        try:
+            resp = getattr(exc, "response", None)
+            headers = getattr(resp, "headers", None) or {}
+            ra = headers.get("retry-after") or headers.get("Retry-After")
+            if ra is not None:
+                retry_after = float(ra)
+        except Exception:
+            retry_after = None
+
+        if status in (401, 403):
+            kind = "auth"
+        elif status in (404, 410):
+            kind = "model_not_found"
+        elif status == 408:
+            kind = "timeout"
+        elif status == 429:
+            kind = "rate_limit"
+        elif status is not None and status >= 500:
+            kind = "provider_error"
+        else:
+            kind = "request"
+
+        return LLMError(
+            provider=provider,
+            model=model,
+            kind=kind,
+            code=status,
+            message=str(exc),
+            retry_after=retry_after,
+        )
+
+    def _wrap_provider_call(self, *, provider: str, model: Optional[str], fn: Callable[[], Any]) -> Any:
+        """Run a provider SDK call, translating provider errors to LLMError."""
+        try:
+            return fn()
+        except LLMError:
+            raise
+        except Exception as e:
+            mapped = self._provider_error_to_llmerror(provider=provider, model=model, exc=e)
+            if mapped is not None:
+                raise mapped from e
+            raise
+
     def create(
         self,
         *,
@@ -2148,12 +2234,21 @@ class LLMAdapter:
 
         if provider == "openai":
             kwargs.pop("__model_spec", None)
-            return self._openai_call(model=model, input=input, stream=stream, **kwargs)
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._openai_call(model=model, input=input, stream=stream, **kwargs),
+            )
         if provider == "gemini":
-            return self._gemini_call(model=model, input=input, stream=stream, **kwargs)
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._gemini_call(model=model, input=input, stream=stream, **kwargs),
+            )
         if provider == "nvidia":
             kwargs.pop("__model_spec", None)
-            return self._nvidia_call(model=model, input=input, stream=stream, **kwargs)
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._nvidia_call(model=model, input=input, stream=stream, **kwargs),
+            )
 
         raise LLMError(
             provider=str(provider or "unknown"),
@@ -2211,18 +2306,33 @@ class LLMAdapter:
             )
 
         if provider == "openai":
-            return self._openai_embedding_call(model=model, input=input, **kwargs)
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._openai_embedding_call(model=model, input=input, **kwargs),
+            )
 
         if provider == "gemini":
             if endpoint == "embed_content":
-                return self._gemini_native_embedding_call(model=model, input=input, **kwargs)
-            return self._gemini_embedding_call(model=model, input=input, **kwargs)
+                return self._wrap_provider_call(
+                    provider=provider, model=model,
+                    fn=lambda: self._gemini_native_embedding_call(model=model, input=input, **kwargs),
+                )
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._gemini_embedding_call(model=model, input=input, **kwargs),
+            )
 
         if provider == "gemini_native":
-            return self._gemini_native_embedding_call(model=model, input=input, **kwargs)
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._gemini_native_embedding_call(model=model, input=input, **kwargs),
+            )
 
         if provider == "nvidia":
-            return self._nvidia_embedding_call(model=model, input=input, **kwargs)
+            return self._wrap_provider_call(
+                provider=provider, model=model,
+                fn=lambda: self._nvidia_embedding_call(model=model, input=input, **kwargs),
+            )
 
         raise LLMError(
             provider=str(provider or "unknown"),
